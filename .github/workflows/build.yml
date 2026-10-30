@@ -1,0 +1,30 @@
+name: build
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@v6
+      - name: setup jdk
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'microsoft'
+      - name: tests de la logique (sans Minecraft)
+        run: |
+          mkdir -p /tmp/t
+          javac -d /tmp/t $(find src/main/java/com/noa/livingvillages/core -name '*.java') tools/CoreSelfTest.java
+          java -cp /tmp/t CoreSelfTest
+      - name: make gradle wrapper executable
+        run: chmod +x ./gradlew
+      - name: build
+        run: ./gradlew build
+      - name: capture build artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: Mod-jar
+          path: build/libs/
