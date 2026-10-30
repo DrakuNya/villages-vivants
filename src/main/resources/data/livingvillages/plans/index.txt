@@ -1,0 +1,6 @@
+petite_maison
+maison_moyenne
+puits
+ferme
+tour_de_garde
+igloo

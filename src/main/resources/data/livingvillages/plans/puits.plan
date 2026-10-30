@@ -1,0 +1,28 @@
+plan: puits
+title: Puits du village
+requires: any
+palette:
+  C = @stone
+  F = @fence
+  S = @slab[type=bottom]
+  ~ = minecraft:water -> -
+layer 0:
+CCC
+C~C
+CCC
+layer 1:
+CCC
+C~C
+CCC
+layer 2:
+F.F
+...
+F.F
+layer 3:
+F.F
+...
+F.F
+layer 4:
+SSS
+SSS
+SSS

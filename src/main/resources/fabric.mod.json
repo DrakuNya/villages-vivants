@@ -1,0 +1,23 @@
+{
+	"schemaVersion": 1,
+	"id": "livingvillages",
+	"version": "${version}",
+	"name": "Villages Vivants",
+	"description": "Les villageois élisent un maire, planifient et construisent leurs bâtiments, et se répartissent de nouveaux métiers.",
+	"authors": [
+		"Noa"
+	],
+	"license": "CC0-1.0",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.noa.livingvillages.LivingVillages"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.20.1",
+		"minecraft": "~26.3",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}

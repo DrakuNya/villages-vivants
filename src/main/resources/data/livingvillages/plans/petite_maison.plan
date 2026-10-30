@@ -1,0 +1,45 @@
+plan: petite_maison
+title: Petite maison
+requires: any
+palette:
+  L = @log
+  P = @planks
+  C = @stone
+  G = minecraft:glass_pane
+  D = @door[half=lower,facing=south] -> @door
+  d = @door[half=upper,facing=south] -> -
+  S = @slab[type=bottom]
+  T = minecraft:torch
+  X = minecraft:crafting_table
+  f = minecraft:white_bed[part=foot,facing=north] -> minecraft:white_bed
+  h = minecraft:white_bed[part=head,facing=north] -> -
+layer 0:
+CCCCC
+CPPPC
+CPPPC
+CPPPC
+CCCCC
+layer 1:
+LPPPL
+PThXP
+P..fP
+P...P
+LPDPL
+layer 2:
+LGPGL
+G...G
+P...P
+G...G
+LPdPL
+layer 3:
+LPPPL
+P...P
+P...P
+P...P
+LPPPL
+layer 4:
+SSSSS
+SSSSS
+SSSSS
+SSSSS
+SSSSS

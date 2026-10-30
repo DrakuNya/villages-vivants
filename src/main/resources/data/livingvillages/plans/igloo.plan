@@ -1,0 +1,38 @@
+plan: igloo
+title: Igloo
+requires: snow,frozen,ice
+palette:
+  S = minecraft:snow_block
+  D = minecraft:oak_door[half=lower,facing=south] -> minecraft:oak_door
+  d = minecraft:oak_door[half=upper,facing=south] -> -
+  T = minecraft:torch
+layer 0:
+.SSS.
+SSSSS
+SSSSS
+SSSSS
+.SSS.
+layer 1:
+.SSS.
+S.T.S
+S...S
+S...S
+.SDS.
+layer 2:
+.SSS.
+S...S
+S...S
+S...S
+.SdS.
+layer 3:
+.....
+.SSS.
+.S.S.
+.SSS.
+.....
+layer 4:
+.....
+.SSS.
+.SSS.
+.SSS.
+.....

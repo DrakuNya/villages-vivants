@@ -1,0 +1,37 @@
+plan: tour_de_garde
+title: Tour de garde
+requires: any
+palette:
+  C = @stone
+  H = minecraft:ladder[facing=south]
+  S = @stone_slab[type=bottom]
+  F = @fence
+  T = minecraft:torch
+layer 0:
+CCC
+CCC
+CCC
+layer 1:
+CCC
+CHC
+C.C
+layer 2:
+CCC
+CHC
+CCC
+layer 3:
+CCC
+CHC
+CCC
+layer 4:
+CCC
+CHC
+CCC
+layer 5:
+SSS
+S.S
+SSS
+layer 6:
+FTF
+...
+F.F

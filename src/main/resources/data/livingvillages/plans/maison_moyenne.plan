@@ -1,0 +1,51 @@
+plan: maison_moyenne
+title: Maison moyenne
+requires: any
+palette:
+  L = @log
+  P = @planks
+  C = @stone
+  G = minecraft:glass_pane
+  D = @door[half=lower,facing=south] -> @door
+  d = @door[half=upper,facing=south] -> -
+  S = @slab[type=bottom]
+  T = minecraft:torch
+  X = minecraft:crafting_table
+  K = minecraft:chest[facing=south]
+  f = minecraft:white_bed[part=foot,facing=north] -> minecraft:white_bed
+  h = minecraft:white_bed[part=head,facing=north] -> -
+layer 0:
+CCCCCCC
+CPPPPPC
+CPPPPPC
+CPPPPPC
+CPPPPPC
+CCCCCCC
+layer 1:
+LPPPPPL
+PT.P.hP
+P..P.fP
+P.....P
+PX.P.KP
+LDPPPPL
+layer 2:
+LPGPGPL
+G..P..G
+P..P..P
+P.....P
+G..P..G
+LdPGPPL
+layer 3:
+LPPPPPL
+P.....P
+P.....P
+P.....P
+P.....P
+LPPPPPL
+layer 4:
+SSSSSSS
+SSSSSSS
+SSSSSSS
+SSSSSSS
+SSSSSSS
+SSSSSSS

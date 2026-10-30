@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "key": {
+    "R": "minecraft:red_wool",
+    "G": "minecraft:gold_ingot"
+  },
+  "pattern": [
+    "RRR",
+    "G G"
+  ],
+  "result": {
+    "id": "livingvillages:mayor_sash",
+    "count": 1
+  }
+}
