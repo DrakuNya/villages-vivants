@@ -1,0 +1,40 @@
+plan: entrepot
+title: Entrepôt
+requires: any
+category: storage
+capacity: 1
+max: 2
+min_pop: 4
+priority: 33
+palette:
+  L = @log
+  P = @planks
+  C = @stone
+  D = @door[half=lower,facing=south] -> @door
+  d = @door[half=upper,facing=south] -> -
+  K = minecraft:chest[facing=south]
+  S = @slab[type=bottom]
+layer 0:
+CCCCC
+CPPPC
+CPPPC
+CPPPC
+CCCCC
+layer 1:
+LPPPL
+PKKKP
+P...P
+P...P
+LPDPL
+layer 2:
+LPPPL
+P...P
+P...P
+P...P
+LPdPL
+layer 3:
+SSSSS
+SSSSS
+SSSSS
+SSSSS
+SSSSS

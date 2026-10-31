@@ -20,6 +20,9 @@ public final class PlanParser {
 
 	public static BuildPlan parse(String text) {
 		String name = null, title = null;
+		String category = "decor";
+		int capacity = 0, max = 99, minPop = 0, priority = 50;
+		List<String> serves = new ArrayList<>();
 		List<String> requires = new ArrayList<>();
 		Map<Character, String[]> palette = new HashMap<>();
 		List<BuildPlan.Template> templates = new ArrayList<>();
@@ -41,6 +44,18 @@ public final class PlanParser {
 				name = trimmed.substring(5).strip();
 			} else if (trimmed.startsWith("title:")) {
 				title = trimmed.substring(6).strip();
+			} else if (trimmed.startsWith("category:")) {
+				category = trimmed.substring(9).strip().toLowerCase();
+			} else if (trimmed.startsWith("capacity:")) {
+				capacity = Integer.parseInt(trimmed.substring(9).strip());
+			} else if (trimmed.startsWith("max:")) {
+				max = Integer.parseInt(trimmed.substring(4).strip());
+			} else if (trimmed.startsWith("min_pop:")) {
+				minPop = Integer.parseInt(trimmed.substring(8).strip());
+			} else if (trimmed.startsWith("priority:")) {
+				priority = Integer.parseInt(trimmed.substring(9).strip());
+			} else if (trimmed.startsWith("serves:")) {
+				for (String r : trimmed.substring(7).split(",")) if (!r.isBlank()) serves.add(r.strip().toLowerCase());
 			} else if (trimmed.startsWith("requires:")) {
 				for (String r : trimmed.substring(9).split(",")) {
 					r = r.strip().toLowerCase();
@@ -91,6 +106,7 @@ public final class PlanParser {
 		}
 		if (name == null) throw new IllegalArgumentException("Plan sans 'plan:'");
 		if (title == null) title = name;
-		return new BuildPlan(name, title, requires, sizeX, maxLayer + 1, sizeZ, templates);
+		return new BuildPlan(name, title, requires, sizeX, maxLayer + 1, sizeZ, templates,
+				new BuildPlan.Meta(category, capacity, serves, max, minPop, priority));
 	}
 }

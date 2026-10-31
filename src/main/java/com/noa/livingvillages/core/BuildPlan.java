@@ -11,6 +11,12 @@ public final class BuildPlan {
 	public record Template(int dx, int dy, int dz, String blockSpec, String itemSpec) {
 	}
 
+	/** Informations pour le maire : à quoi sert ce bâtiment, combien de fois, à partir de quelle population... */
+	public record Meta(String category, int capacity, List<String> serves, int max, int minPopulation, int priority) {
+		public static final Meta DEFAULT = new Meta("decor", 0, List.of(), 99, 0, 50);
+	}
+
+	public final Meta meta;
 	public final String name;
 	public final String title;
 	/** Fragments de noms de biome ; vide = partout. */
@@ -19,6 +25,11 @@ public final class BuildPlan {
 	private final List<Template> templates;
 
 	public BuildPlan(String name, String title, List<String> requires, int sizeX, int sizeY, int sizeZ, List<Template> templates) {
+		this(name, title, requires, sizeX, sizeY, sizeZ, templates, Meta.DEFAULT);
+	}
+
+	public BuildPlan(String name, String title, List<String> requires, int sizeX, int sizeY, int sizeZ, List<Template> templates, Meta meta) {
+		this.meta = meta;
 		this.name = name;
 		this.title = title;
 		this.requires = List.copyOf(requires);

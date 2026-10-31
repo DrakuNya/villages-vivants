@@ -1,0 +1,24 @@
+plan: bergerie
+title: Bergerie
+requires: any
+category: workplace
+serves: shepherd
+max: 1
+priority: 35
+palette:
+  d = minecraft:coarse_dirt -> -
+  F = @fence
+  G = @fence_gate[facing=south] -> @fence_gate
+  H = minecraft:hay_block
+layer 0:
+ddddddd
+ddddddd
+ddddddd
+ddddddd
+ddddddd
+layer 1:
+FFFFFFF
+FH...HF
+F.....F
+F.....F
+FFFGFFF

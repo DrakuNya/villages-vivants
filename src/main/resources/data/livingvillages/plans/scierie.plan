@@ -1,0 +1,33 @@
+plan: scierie
+title: Scierie
+requires: any
+category: workplace
+serves: lumberjack
+max: 1
+priority: 34
+palette:
+  P = @planks
+  L = @log
+  X = minecraft:crafting_table
+  K = minecraft:chest[facing=south]
+  S = @slab[type=bottom]
+layer 0:
+PPPPP
+PPPPP
+PPPPP
+PPPPP
+layer 1:
+L...L
+.X.K.
+.....
+L...L
+layer 2:
+L...L
+.....
+.....
+L...L
+layer 3:
+SSSSS
+SSSSS
+SSSSS
+SSSSS

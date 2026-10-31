@@ -4,3 +4,10 @@ puits
 ferme
 tour_de_garde
 igloo
+bergerie
+enclos
+scierie
+entrepot
+forge
+marche
+cuisine

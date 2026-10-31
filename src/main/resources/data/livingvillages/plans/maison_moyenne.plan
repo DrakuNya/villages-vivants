@@ -1,6 +1,10 @@
 plan: maison_moyenne
 title: Maison moyenne
 requires: any
+category: house
+capacity: 4
+priority: 25
+min_pop: 3
 palette:
   L = @log
   P = @planks

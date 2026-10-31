@@ -1,6 +1,10 @@
 plan: puits
 title: Puits du village
 requires: any
+category: well
+max: 1
+min_pop: 2
+priority: 10
 palette:
   C = @stone
   F = @fence

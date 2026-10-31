@@ -1,0 +1,32 @@
+plan: marche
+title: Marché couvert
+requires: any
+category: market
+max: 1
+min_pop: 5
+priority: 42
+palette:
+  P = @planks
+  F = @fence
+  K = minecraft:chest[facing=south]
+  S = @slab[type=bottom]
+layer 0:
+PPPPPPP
+PPPPPPP
+PPPPPPP
+PPPPPPP
+layer 1:
+F..F..F
+.K...K.
+.......
+F..F..F
+layer 2:
+F..F..F
+.......
+.......
+F..F..F
+layer 3:
+SSSSSSS
+SSSSSSS
+SSSSSSS
+SSSSSSS

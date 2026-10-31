@@ -10,7 +10,7 @@ public enum Role {
 	LUMBERJACK("lumberjack", "Bûcheron", "minecraft:iron_axe", id -> id.endsWith("_log") || id.endsWith("_stem")),
 	MINER("miner", "Mineur", "minecraft:iron_pickaxe",
 			id -> List.of("minecraft:cobblestone", "minecraft:stone", "minecraft:sand", "minecraft:gravel", "minecraft:coal",
-					"minecraft:clay_ball", "minecraft:iron_ingot", "minecraft:sandstone").contains(id)),
+					"minecraft:clay_ball", "minecraft:iron_ingot", "minecraft:sandstone", "minecraft:dirt", "minecraft:snow_block").contains(id)),
 	FARMER("farmer", "Fermier", "minecraft:iron_hoe",
 			id -> List.of("minecraft:wheat", "minecraft:carrot", "minecraft:potato", "minecraft:beetroot",
 					"minecraft:wheat_seeds", "minecraft:hay_block").contains(id)),
@@ -36,6 +36,12 @@ public enum Role {
 
 	public boolean canProduce(String item) {
 		return produces.test(item);
+	}
+
+	/** Un métier de la ville sait-il produire cet objet à l'état brut ? */
+	public static boolean anyProduces(String item) {
+		for (Role r : values()) if (r.canProduce(item)) return true;
+		return false;
 	}
 
 	public static Role byItem(String itemId) {

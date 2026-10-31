@@ -1,6 +1,9 @@
 plan: petite_maison
 title: Petite maison
 requires: any
+category: house
+capacity: 2
+priority: 20
 palette:
   L = @log
   P = @planks

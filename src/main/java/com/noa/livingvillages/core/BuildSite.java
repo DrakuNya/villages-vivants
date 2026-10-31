@@ -21,6 +21,12 @@ public final class BuildSite {
 	public final int rotation;
 	private final List<PlanBlock> blocks;
 	private int cursor;
+	/** Plus petit = plus urgent. */
+	public int priority = 50;
+	/** Le terrain a-t-il été aplani et dégagé ? Le constructeur n'attaque le plan qu'après. */
+	public boolean prepDone = true;
+	/** Le chemin vers la place a-t-il déjà été tracé ? */
+	public boolean roadPlanned = true;
 
 	public BuildSite(String id, BuildPlan plan, Theme theme, int ox, int oy, int oz, int rotation, int cursor) {
 		this.id = id;
@@ -96,6 +102,27 @@ public final class BuildSite {
 			out.add(new ItemStatus(e.getKey(), Math.min(available.count(e.getKey()), e.getValue()), e.getValue()));
 		}
 		return out;
+	}
+
+	/** Case juste devant la porte (ou le portillon), à l'extérieur du bâtiment : départ du chemin. */
+	public int[] frontCell() {
+		int fx = plan.footprintX(rotation), fz = plan.footprintZ(rotation);
+		for (PlanBlock b : blocks) {
+			String id = b.blockId();
+			boolean door = id.endsWith("_door") && b.block().contains("half=lower");
+			if (!door && !id.endsWith("_fence_gate")) continue;
+			if (b.dz() == fz - 1) return new int[]{ox + b.dx(), oz + fz};
+			if (b.dx() == 0) return new int[]{ox - 1, oz + b.dz()};
+			if (b.dx() == fx - 1) return new int[]{ox + fx, oz + b.dz()};
+			if (b.dz() == 0) return new int[]{ox + b.dx(), oz - 1};
+		}
+		// pas de porte : milieu de la face qui était « au sud » dans le plan, après rotation
+		return switch (rotation) {
+			case 1 -> new int[]{ox - 1, oz + fz / 2};
+			case 2 -> new int[]{ox + fx / 2, oz - 1};
+			case 3 -> new int[]{ox + fx, oz + fz / 2};
+			default -> new int[]{ox + fx / 2, oz + fz};
+		};
 	}
 
 	/** Zone occupée (min/max inclus) : x0,z0,x1,z1. */

@@ -1,0 +1,28 @@
+plan: enclos
+title: Enclos à bétail
+requires: any
+category: workplace
+serves: breeder
+max: 1
+priority: 36
+palette:
+  d = minecraft:coarse_dirt -> -
+  F = @fence
+  G = @fence_gate[facing=south] -> @fence_gate
+  H = minecraft:hay_block
+layer 0:
+ddddddd
+ddddddd
+ddddddd
+ddddddd
+ddddddd
+ddddddd
+ddddddd
+layer 1:
+FFFFFFF
+F.....F
+F.....F
+F..H..F
+F.....F
+F.....F
+FFFGFFF

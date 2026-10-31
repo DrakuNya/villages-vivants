@@ -1,6 +1,9 @@
 plan: igloo
 title: Igloo
 requires: snow,frozen,ice
+category: house
+capacity: 2
+priority: 22
 palette:
   S = minecraft:snow_block
   D = minecraft:oak_door[half=lower,facing=south] -> minecraft:oak_door

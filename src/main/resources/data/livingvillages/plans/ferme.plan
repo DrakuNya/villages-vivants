@@ -1,12 +1,16 @@
 plan: ferme
 title: Ferme
 requires: any
+category: farm
+capacity: 4
+priority: 30
+serves: farmer
 palette:
   d = minecraft:farmland -> minecraft:dirt
   ~ = minecraft:water -> -
   F = @fence
   G = @fence_gate[facing=south] -> @fence_gate
-  w = minecraft:wheat[age=0] -> minecraft:wheat_seeds
+  w = minecraft:wheat[age=0] -> -
 layer 0:
 ddddd
 ddddd

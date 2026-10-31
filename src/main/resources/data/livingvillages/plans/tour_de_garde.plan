@@ -1,6 +1,11 @@
 plan: tour_de_garde
 title: Tour de garde
 requires: any
+category: defense
+capacity: 6
+min_pop: 4
+priority: 40
+serves: guard
 palette:
   C = @stone
   H = minecraft:ladder[facing=south]

@@ -1,0 +1,38 @@
+plan: forge
+title: Forge
+requires: any
+category: workplace
+max: 1
+min_pop: 6
+priority: 45
+palette:
+  C = @stone
+  F = minecraft:furnace[facing=south]
+  X = minecraft:crafting_table
+  D = @door[half=lower,facing=south] -> @door
+  d = @door[half=upper,facing=south] -> -
+  S = @stone_slab[type=bottom]
+layer 0:
+CCCCC
+CCCCC
+CCCCC
+CCCCC
+CCCCC
+layer 1:
+CCCCC
+CF.XC
+C...C
+C...C
+CCDCC
+layer 2:
+CCCCC
+C...C
+C...C
+C...C
+CCdCC
+layer 3:
+SSSSS
+SSSSS
+SSSSS
+SSSSS
+SSSSS

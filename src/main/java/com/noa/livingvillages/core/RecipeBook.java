@@ -65,9 +65,8 @@ public final class RecipeBook {
 		b.add(Recipe.of("dalle en grès", mc("sandstone_slab"), 6, mc("sandstone"), 3));
 		b.add(Recipe.of("muret en grès", mc("sandstone_wall"), 6, mc("sandstone"), 6));
 		// Laine / lit / neige
-		b.add(Recipe.of("laine", mc("white_wool"), 1, mc("string"), 4));
 		b.add(Recipe.of("tapis", mc("white_carpet"), 3, mc("white_wool"), 2));
-		b.add(Recipe.of("lit", mc("white_bed"), 1, mc("white_wool"), 3, mc("oak_planks"), 3));
+		for (String w : WOODS) b.add(Recipe.of("lit (" + w + ")", mc("white_bed"), 1, mc("white_wool"), 3, mc(w + "_planks"), 3));
 		b.add(Recipe.of("bloc de neige", mc("snow_block"), 1, mc("snowball"), 4));
 		b.add(Recipe.of("botte de foin", mc("hay_block"), 1, mc("wheat"), 9));
 		return b;

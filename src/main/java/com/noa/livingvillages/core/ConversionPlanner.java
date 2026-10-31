@@ -115,7 +115,12 @@ public final class ConversionPlanner {
 			if (firstFailure == null) firstFailure = t;
 		}
 		visiting.remove(item);
-		// aucune recette réalisable : on garde le rapport de la première (ce qui manque vraiment)
+		// aucune recette réalisable : si un métier sait produire l'objet directement, on le demande tel quel
+		if (Role.anyProduces(item)) {
+			s.missing.merge(item, n, Integer::sum);
+			return false;
+		}
+		// sinon on garde le rapport de la première recette (ce qui manque vraiment)
 		s.missing.clear();
 		s.missing.putAll(firstFailure.missing);
 		return false;

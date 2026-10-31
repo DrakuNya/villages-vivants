@@ -1,0 +1,39 @@
+plan: cuisine
+title: Cuisine du village
+requires: any
+category: workplace
+serves: cook
+max: 1
+min_pop: 4
+priority: 38
+palette:
+  L = @log
+  P = @planks
+  C = @stone
+  G = minecraft:glass_pane
+  D = @door[half=lower,facing=south] -> @door
+  d = @door[half=upper,facing=south] -> -
+  F = minecraft:furnace[facing=south]
+  X = minecraft:crafting_table
+  K = minecraft:chest[facing=south]
+  S = @slab[type=bottom]
+layer 0:
+CCCCC
+CPPPC
+CPPPC
+CCCCC
+layer 1:
+LPPPL
+PFXKP
+P...P
+LPDPL
+layer 2:
+LPGPL
+G...G
+P...P
+LPdPL
+layer 3:
+SSSSS
+SSSSS
+SSSSS
+SSSSS
