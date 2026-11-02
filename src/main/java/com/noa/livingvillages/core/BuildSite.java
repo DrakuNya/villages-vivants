@@ -60,6 +60,11 @@ public final class BuildSite {
 		return complete() ? Optional.empty() : Optional.of(blocks.get(cursor));
 	}
 
+	/** Les prochains blocs à poser (au plus n). */
+	public List<PlanBlock> upcoming(int n) {
+		return blocks.subList(cursor, Math.min(blocks.size(), cursor + Math.max(0, n)));
+	}
+
 	public void advance() {
 		if (!complete()) cursor++;
 	}

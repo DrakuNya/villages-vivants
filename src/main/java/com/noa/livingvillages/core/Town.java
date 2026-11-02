@@ -16,6 +16,8 @@ public final class Town {
 	public final Stock stockpile = new Stock();
 	public final TownBoard board = new TownBoard();
 	public final Market market = new Market();
+	/** Ce que porte chaque villageois (identifiant -> sac). */
+	public final Map<String, Inventory> inventories = new LinkedHashMap<>();
 	/** Le maire décide-t-il seul des constructions ? */
 	public boolean auto = true;
 	/** Chemins de terre de la ville (clé = coordonnées). */
@@ -82,6 +84,32 @@ public final class Town {
 			}
 		}
 		return out;
+	}
+
+	public Inventory inventoryOf(String memberId) {
+		return inventories.computeIfAbsent(memberId, k -> new Inventory());
+	}
+
+	/** Dépose tout le sac dans l'entrepôt et solde les commandes que cet ouvrier avait prises. */
+	public Stock deposit(String workerId) {
+		Inventory inv = inventoryOf(workerId);
+		TownBoard.Request r = board.claimedBy(workerId);
+		Stock dropped = inv.drain();
+		if (r != null) board.delivered(r, dropped.count(r.item));
+		for (Map.Entry<String, Integer> e : dropped.asMap().entrySet()) stockpile.add(e.getKey(), e.getValue());
+		board.release(workerId);
+		return dropped;
+	}
+
+	/** Coordonnées d'un coffre de l'entrepôt construit, ou null : dans ce cas le dépôt est la place centrale. */
+	public int[] depotChest() {
+		for (BuildSite s : sites) {
+			if (!s.complete() || !s.plan.meta.category().equals("storage")) continue;
+			for (PlanBlock b : s.plan.blocks(s.theme, s.rotation)) {
+				if (b.blockId().endsWith(":chest")) return s.worldPos(b);
+			}
+		}
+		return null;
 	}
 
 	public int pendingRoadCells() {

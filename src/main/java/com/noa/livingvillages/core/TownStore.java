@@ -25,6 +25,11 @@ public final class TownStore {
 						.append(s.cursor()).append('\t').append(s.priority).append('\t').append(s.prepDone ? 1 : 0).append('\t')
 						.append(s.roadPlanned ? 1 : 0).append('\n');
 			}
+			for (Map.Entry<String, Inventory> iv : t.inventories.entrySet()) {
+				for (Map.Entry<String, Integer> it : iv.getValue().asMap().entrySet()) {
+					sb.append("carry\t").append(iv.getKey()).append('\t').append(it.getKey()).append('\t').append(it.getValue()).append('\n');
+				}
+			}
 			for (RoadCell rc : t.roads.values()) {
 				sb.append("road\t").append(rc.x).append('\t').append(rc.z).append('\t').append(rc.lamp ? 1 : 0).append('\t')
 						.append(rc.done ? 1 : 0).append('\t')
@@ -72,6 +77,9 @@ public final class TownStore {
 						int dash = f[1].lastIndexOf("-c");
 						if (dash >= 0) cur.bumpSiteCounter(Integer.parseInt(f[1].substring(dash + 2)) + 1);
 					}
+				}
+				case "carry" -> {
+					if (cur != null) cur.inventoryOf(f[1]).add(f[2], Integer.parseInt(f[3]));
 				}
 				case "auto" -> {
 					if (cur != null) cur.auto = f[1].equals("1");

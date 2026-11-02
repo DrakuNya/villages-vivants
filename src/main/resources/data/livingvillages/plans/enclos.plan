@@ -9,7 +9,7 @@ palette:
   d = minecraft:coarse_dirt -> -
   F = @fence
   G = @fence_gate[facing=south] -> @fence_gate
-  H = minecraft:hay_block
+  H = minecraft:hay_block -> -
 layer 0:
 ddddddd
 ddddddd

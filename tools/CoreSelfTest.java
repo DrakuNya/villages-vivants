@@ -15,6 +15,157 @@ public class CoreSelfTest {
 		}
 	}
 
+	/** Construit tout le plan : fait des tours au dépôt quand le sac manque ; renvoie le nombre de blocs posés (ou -1 si bloqué). */
+	static int buildAll(Town town, BuildSite site, BuilderLogic logic, Inventory bag) {
+		int placed = 0;
+		while (!site.complete()) {
+			if (logic.needsFetch(site, bag)) {
+				logic.fetch(town, site, bag);
+				if (logic.needsFetch(site, bag)) return -1;
+			}
+			BuilderLogic.Action a = logic.next(site, bag);
+			if (a.kind() != BuilderLogic.Kind.PLACE) return -1;
+			site.advance();
+			placed++;
+			if (bag.total() > Inventory.SLOTS * 64) return -2;
+		}
+		return placed;
+	}
+
+	/** Phase C : sacs des villageois, tours au dépôt, ouvriers de récolte, chaîne complète sans matériaux de départ. */
+	static void phaseC(PlanCatalog cat, ConversionPlanner planner) {
+		// --- inventaire : piles, place, retrait
+		Inventory inv = new Inventory();
+		check(inv.add("minecraft:oak_log", 100) == 0 && inv.count("minecraft:oak_log") == 100, "100 bûches tiennent (2 piles)");
+		check(inv.add("minecraft:white_bed", 3) == 0 && inv.count("minecraft:white_bed") == 3, "3 lits = 3 emplacements");
+		check(inv.room("minecraft:white_bed") == 3 && inv.room("minecraft:oak_log") == 28 + 3 * 64, "place restante : " + inv.room("minecraft:white_bed") + " / " + inv.room("minecraft:oak_log"));
+		check(inv.add("minecraft:white_bed", 10) == 7, "seulement 3 lits de plus : 7 refusés");
+		inv.add("minecraft:white_bed", 3);
+		check(inv.room("minecraft:white_bed") == 0 && !inv.canAdd("minecraft:white_bed", 1), "plus de place pour des lits (8 emplacements)");
+		check(inv.remove("minecraft:oak_log", 70) && inv.count("minecraft:oak_log") == 30 && inv.canAdd("minecraft:white_bed", 1), "retirer des bûches libère de la place");
+		check(!inv.remove("minecraft:oak_log", 31) && inv.count("minecraft:oak_log") == 30, "retrait impossible : tout ou rien");
+		check(inv.copy().drain().count("minecraft:oak_log") == 30 && inv.count("minecraft:oak_log") == 30, "copie indépendante");
+		Inventory sn = new Inventory();
+		sn.add("minecraft:snowball", 40);
+		check(sn.asMap().equals(Map.of("minecraft:snowball", 40)) && sn.room("minecraft:snowball") == 16 * 5 + 8, "boules de neige : piles de 16");
+
+		// --- tour au dépôt : on fabrique au dépôt et on repart avec le résultat dans le sac
+		Town t = new Town("c", "Cville");
+		t.stockpile.add("minecraft:oak_log", 2);
+		Inventory bag = new Inventory();
+		Logistics.FetchResult f = Logistics.fetch(t, planner, bag, Map.of("minecraft:oak_door", 3));
+		check(f.moved().equals(Map.of("minecraft:oak_door", 3)) && bag.count("minecraft:oak_door") == 3, "2 bûches -> 3 portes dans le sac : " + f);
+		check(t.stockpile.count("minecraft:oak_planks") == 2 && t.stockpile.count("minecraft:oak_log") == 0, "au dépôt il reste 2 planches : " + t.stockpile);
+		// pas assez pour tout : on prend ce qu'on peut
+		Town t2 = new Town("c2", "C2");
+		t2.stockpile.add("minecraft:cobblestone", 10);
+		Inventory b2 = new Inventory();
+		f = Logistics.fetch(t2, planner, b2, Map.of("minecraft:cobblestone", 25));
+		check(b2.count("minecraft:cobblestone") == 10 && t2.stockpile.count("minecraft:cobblestone") == 0, "il prend les 10 qu'il y a : " + f + " " + b2);
+		check(f.missing().containsKey("minecraft:cobblestone"), "et signale le manque");
+		// limite de place du sac
+		Town t3 = new Town("c3", "C3");
+		t3.stockpile.add("minecraft:cobblestone", 1000);
+		Inventory b3 = new Inventory();
+		for (int i = 0; i < 7; i++) b3.add("minecraft:white_bed", 1);
+		Logistics.fetch(t3, planner, b3, Map.of("minecraft:cobblestone", 500));
+		check(b3.count("minecraft:cobblestone") == 64 && t3.stockpile.count("minecraft:cobblestone") == 1000 - 64, "un seul emplacement libre : 64 pierres seulement");
+
+		// --- ouvrier de récolte : récolte dans le sac, dépose, la commande diminue
+		Town w = new Town("w", "W");
+		w.mayorId = "m";
+		w.members.put("l1", Role.LUMBERJACK);
+		w.board.sync("s1", Map.of("minecraft:oak_log", 100));
+		Inventory li = w.inventoryOf("l1");
+		int harvested = 0;
+		for (int guard = 0; guard < 1000; guard++) {
+			WorkerLogic.Action a = WorkerLogic.next(w, "l1", Role.LUMBERJACK, li);
+			if (a.kind() == WorkerLogic.Kind.HARVEST) {
+				check(li.add(a.request().item, 1) == 0, "récolte : il y a de la place");
+				harvested++;
+			} else if (a.kind() == WorkerLogic.Kind.DEPOSIT) {
+				w.deposit("l1");
+			} else break;
+			if (harvested >= 100 && li.isEmpty()) break;
+		}
+		check(harvested == 100 && w.stockpile.count("minecraft:oak_log") == 100 && li.isEmpty(), "100 bûches récoltées et déposées : " + w.stockpile);
+		check(w.board.all().isEmpty() || w.board.all().get(0).qty == 0 || w.board.claimedBy("l1") == null, "commande soldée");
+		// un mineur n'accepte pas une commande de bûches
+		Town wb = new Town("wb", "Wb");
+		wb.board.sync("s1", Map.of("minecraft:oak_log", 10));
+		check(WorkerLogic.next(wb, "m1", Role.MINER, new Inventory()).kind() == WorkerLogic.Kind.IDLE, "le mineur ne prend pas une commande de bûches");
+		check(WorkerLogic.next(wb, "l1", Role.LUMBERJACK, new Inventory()).kind() == WorkerLogic.Kind.HARVEST, "le bûcheron la prend");
+
+		// --- sauvegarde des sacs
+		Town sv = new Town("sv", "Sv");
+		sv.members.put("b1", Role.BUILDER);
+		sv.inventoryOf("b1").add("minecraft:oak_door", 2);
+		sv.inventoryOf("b1").add("minecraft:cobblestone", 70);
+		Town back = TownStore.read(TownStore.write(List.of(sv)), cat).get(0);
+		check(back.inventoryOf("b1").count("minecraft:cobblestone") == 70 && back.inventoryOf("b1").count("minecraft:oak_door") == 2, "sacs sauvegardés");
+
+		// --- dépôt : sur la place tant qu'il n'y a pas d'entrepôt, puis dans le coffre de l'entrepôt
+		check(back.depotChest() == null, "pas d'entrepôt : le dépôt est la place");
+		BuildSite ent = new BuildSite("sv-c1", cat.get("entrepot"), Theme.PLAINS, 10, 64, 20, 0, 0);
+		back.sites.add(ent);
+		check(back.depotChest() == null, "entrepôt pas fini : toujours la place");
+		while (!ent.complete()) ent.advance();
+		int[] chest = back.depotChest();
+		check(chest != null && chest[0] >= 10 && chest[0] <= 14 && chest[1] == 65 && chest[2] >= 20 && chest[2] <= 24, "coffre de l'entrepôt trouvé : " + java.util.Arrays.toString(chest));
+
+		// --- chaîne complète : AUCUN matériau au départ ; bûcherons, mineurs, bergers récoltent, déposent ; les constructeurs fetch + bâtissent
+		BuilderLogic logic = new BuilderLogic(planner);
+		int worst = 0;
+		String worstName = "";
+		for (BuildPlan p : cat.all()) {
+			for (Theme th : Theme.values()) {
+				int iters = runPipeline(p, th, logic, planner);
+				check(iters > 0, "chaîne complète bloquée : " + p.name + "/" + th);
+				if (iters > worst) {
+					worst = iters;
+					worstName = p.name + "/" + th;
+				}
+			}
+		}
+		System.out.println("  chaîne complète (récolte -> dépôt -> fabrication -> construction) : le plus long = " + worst + " tours (" + worstName + ")");
+	}
+
+	/** Renvoie le nombre de tours nécessaires pour finir le plan, ou -1 si ça bloque. */
+	static int runPipeline(BuildPlan plan, Theme theme, BuilderLogic logic, ConversionPlanner planner) {
+		Town t = new Town("sim", "Sim");
+		t.mayorId = "m";
+		String[] ids = {"b1", "b2", "l1", "l2", "m1", "m2", "s1"};
+		Role[] roles = {Role.BUILDER, Role.BUILDER, Role.LUMBERJACK, Role.LUMBERJACK, Role.MINER, Role.MINER, Role.SHEPHERD};
+		for (int i = 0; i < ids.length; i++) t.members.put(ids[i], roles[i]);
+		BuildSite site = new BuildSite("sim-c1", plan, theme, 0, 64, 0, 0, 0);
+		t.sites.add(site);
+		for (int iter = 1; iter <= 60000; iter++) {
+			t.syncBoard(planner);
+			for (int i = 0; i < ids.length; i++) {
+				Role r = roles[i];
+				Inventory inv = t.inventoryOf(ids[i]);
+				if (r == Role.BUILDER) {
+					if (logic.needsFetch(site, inv)) {
+						logic.fetch(t, site, inv);
+						if (logic.needsFetch(site, inv)) continue; // on attend au dépôt
+					}
+					BuilderLogic.Action a = logic.next(site, inv);
+					if (a.kind() == BuilderLogic.Kind.PLACE) site.advance();
+				} else {
+					WorkerLogic.Action a = WorkerLogic.next(t, ids[i], r, inv);
+					if (a.kind() == WorkerLogic.Kind.HARVEST) {
+						if (inv.add(a.request().item, 1) != 0) return -2;
+					} else if (a.kind() == WorkerLogic.Kind.DEPOSIT) {
+						t.deposit(ids[i]);
+					}
+				}
+				if (inv.total() > Inventory.SLOTS * 64) return -3;
+			}
+			if (site.complete()) return iter;
+		}
+		return -1;
+	}
+
 	/** Faux terrain : une fonction de hauteur et une zone interdite (lac). */
 	static final class Fake implements TerrainView {
 		final java.util.function.IntBinaryOperator height;
@@ -211,12 +362,16 @@ public class CoreSelfTest {
 		for (TownBoard.Request r : w.board.all()) if (r.siteId.endsWith("-routes") && r.item.equals("minecraft:coal")) coalRequested = true;
 		check(coalRequested, "le lampadaire réclame du charbon");
 		RoadLogic rl = new RoadLogic(planner);
-		check(rl.next(w).kind() == RoadLogic.Kind.WAIT, "lampadaire sans charbon : attente");
+		Inventory cantonnier = new Inventory();
+		check(rl.needsTorch(w, cantonnier), "lampadaire à poser : il faut une torche");
+		check(rl.next(w, cantonnier).kind() == RoadLogic.Kind.FETCH, "sans torche : tour au dépôt");
+		check(!rl.fetchTorches(w, cantonnier).movedAnything(), "pas de charbon : pas de torche");
 		w.stockpile.add("minecraft:coal", 1);
-		var act = rl.next(w);
-		check(act.kind() == RoadLogic.Kind.LAMP && act.cell() == lampCell, "lampadaire avec charbon et bûches");
+		check(rl.fetchTorches(w, cantonnier).movedAnything() && cantonnier.has("minecraft:torch", 1), "charbon + bûches : torche dans le sac");
+		var act = rl.next(w, cantonnier);
+		check(act.kind() == RoadLogic.Kind.LAMP && act.cell() == lampCell, "lampadaire posé avec la torche du sac");
 		lampCell.lampPlaced = true;
-		check(rl.next(w).kind() == RoadLogic.Kind.DONE, "routes terminées");
+		check(rl.next(w, cantonnier).kind() == RoadLogic.Kind.DONE, "routes terminées");
 		w.auto = false;
 		w.sites.get(1).prepDone = false;
 		w.sites.get(1).priority = 33;
@@ -360,7 +515,6 @@ public class CoreSelfTest {
 		town.syncBoard(planner);
 		boolean anyLog = false;
 		for (TownBoard.Request q : town.board.all()) if (q.item.endsWith("_log")) anyLog = true;
-		check(anyLog || town.board.all().isEmpty() || true, "ok");
 
 		// 9) sauvegarde / chargement
 		town.stockpile.add("minecraft:sand", 3);
@@ -382,7 +536,7 @@ public class CoreSelfTest {
 		for (Market.Trade t : trades) bought += t.qty();
 		check(bought == 5 && m.balance("acheteur") == 0 && m.balance("berger") == 10, "marché : achat limité par les jetons : " + trades);
 
-		// 11) simulation : un constructeur bâtit chaque plan, dans chaque style, à partir de matières premières
+		// 11) simulation : un constructeur bâtit chaque plan, dans chaque style, avec des matières premières au dépôt
 		BuilderLogic logic = new BuilderLogic(planner);
 		for (BuildPlan p : cat.all()) {
 			for (Theme th : Theme.values()) {
@@ -391,35 +545,26 @@ public class CoreSelfTest {
 				tv.stockpile.add("minecraft:cobblestone", 300);
 				tv.stockpile.add("minecraft:sand", 300);
 				tv.stockpile.add("minecraft:white_wool", 60);
-				tv.stockpile.add("minecraft:wheat", 200);
 				tv.stockpile.add("minecraft:snowball", 600);
 				tv.stockpile.add("minecraft:coal", 30);
 				tv.stockpile.add("minecraft:dirt", 60);
-				tv.stockpile.add("minecraft:wheat_seeds", 60);
 				BuildSite bs = new BuildSite("sim-c1", p, th, 0, 0, 0, 0, 0);
-				int placed = 0;
-				boolean stuck = false;
-				while (true) {
-					BuilderLogic.Action a = logic.next(tv, bs);
-					if (a.kind() == BuilderLogic.Kind.DONE) break;
-					if (a.kind() == BuilderLogic.Kind.WAIT) {
-						stuck = true;
-						System.out.println("  bloqué sur " + p.name + "/" + th + " : " + a.block() + " manque " + a.missing());
-						break;
-					}
-					bs.advance();
-					placed++;
-				}
-				check(!stuck && bs.complete() && placed == bs.total(), "simulation " + p.name + "/" + th);
+				Inventory bag = new Inventory();
+				check(buildAll(tv, bs, logic, bag) == bs.total(), "simulation " + p.name + "/" + th);
 			}
 		}
-		// Pénurie : une petite maison sans rien -> le constructeur attend et dit quoi
+		// Pénurie : une petite maison sans rien -> au dépôt, rien à prendre, et on sait ce qui manque
 		Town poor = new Town("poor", "Pauvre");
 		BuildSite ps = new BuildSite("poor-c1", pm, Theme.PLAINS, 0, 0, 0, 0, 0);
-		BuilderLogic.Action wa = logic.next(poor, ps);
-		check(wa.kind() == BuilderLogic.Kind.WAIT && wa.missing().containsKey("minecraft:cobblestone"), "sans ressources : attente " + wa);
+		Inventory pbag = new Inventory();
+		check(logic.needsFetch(ps, pbag), "sac vide : il faut aller au dépôt");
+		Logistics.FetchResult pf = logic.fetch(poor, ps, pbag);
+		check(!pf.movedAnything() && pf.missing().containsKey("minecraft:cobblestone"), "sans ressources : rien à prendre " + pf);
 
 		phaseB(cat, planner);
+		phaseC(cat, planner);
+
+
 
 		System.out.println(checks + " vérifications, " + failures + " échec(s)");
 		if (failures > 0) System.exit(1);

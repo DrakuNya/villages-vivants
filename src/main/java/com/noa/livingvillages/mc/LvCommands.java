@@ -42,6 +42,7 @@ public final class LvCommands {
 								.then(Commands.literal("on").executes(ctx -> auto(ctx, true)))
 								.then(Commands.literal("off").executes(ctx -> auto(ctx, false))))
 						.then(Commands.literal("decide").executes(LvCommands::decide))
+						.then(Commands.literal("inv").executes(LvCommands::inventories))
 						.then(Commands.literal("place")
 								.then(Commands.argument("plan", StringArgumentType.word()).executes(LvCommands::place)))
 						.then(Commands.literal("stock")
@@ -126,6 +127,23 @@ public final class LvCommands {
 			say(ctx, "Le maire n'a rien à décider (file pleine, maire absent ou pas de place).", ChatFormatting.YELLOW);
 			return 0;
 		}
+		return 1;
+	}
+
+	private static int inventories(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+		Town t = townNear(ctx);
+		if (t == null) {
+			say(ctx, "Aucune ville à proximité.", ChatFormatting.RED);
+			return 0;
+		}
+		say(ctx, "— Sacs des habitants de " + t.name + " —", ChatFormatting.GOLD);
+		for (var m : t.members.entrySet()) {
+			var bag = t.inventoryOf(m.getKey());
+			String id4 = m.getKey().substring(0, 4);
+			say(ctx, m.getValue().displayName + " (" + id4 + ") : " + (bag.isEmpty() ? "vide" : bag.toString().replace("minecraft:", "")), ChatFormatting.YELLOW);
+		}
+		say(ctx, "Dépôt : " + (t.depotChest() == null ? "la place centrale" : "coffre de l'entrepôt") + " — entrepôt : "
+				+ (t.stockpile.asMap().isEmpty() ? "vide" : t.stockpile.toString().replace("minecraft:", "")), ChatFormatting.GRAY);
 		return 1;
 	}
 

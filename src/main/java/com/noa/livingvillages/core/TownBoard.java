@@ -66,6 +66,12 @@ public final class TownBoard {
 		return null;
 	}
 
+	/** La demande actuellement prise en charge par cet ouvrier, ou null. */
+	public Request claimedBy(String workerId) {
+		for (Request r : requests) if (workerId.equals(r.claimedBy)) return r;
+		return null;
+	}
+
 	public void release(String workerId) {
 		for (Request r : requests) {
 			if (workerId.equals(r.claimedBy)) {

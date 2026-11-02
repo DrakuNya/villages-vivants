@@ -1,17 +1,19 @@
 package com.noa.livingvillages.core;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.TreeMap;
 
 /**
- * Le « cerveau » du constructeur, sans Minecraft : à chaque tentative, dit quel bloc poser, ou ce qui manque.
- * Il transforme au besoin les objets de l'entrepôt (bûches -> planches -> portes...).
+ * Le « cerveau » du constructeur, sans Minecraft. Il construit avec ce qu'il porte dans son sac ;
+ * quand il lui manque l'objet du prochain bloc, il doit faire un tour au dépôt (fetch) où il fabrique et recharge son sac.
  */
 public final class BuilderLogic {
-	public enum Kind {PLACE, WAIT, DONE}
+	public enum Kind {PLACE, FETCH, DONE}
 
-	public record Action(Kind kind, PlanBlock block, Map<String, Integer> missing) {
+	public record Action(Kind kind, PlanBlock block) {
 	}
+
+	private static final int LOOKAHEAD_BLOCKS = 256;
 
 	private final ConversionPlanner planner;
 
@@ -19,31 +21,45 @@ public final class BuilderLogic {
 		this.planner = planner;
 	}
 
-	/**
-	 * Prépare le prochain bloc. Si PLACE : l'objet nécessaire a déjà été retiré de l'entrepôt ;
-	 * le code Minecraft pose le bloc puis appelle site.advance() (ou rend l'objet avec refund() en cas d'échec).
-	 */
-	public Action next(Town town, BuildSite site) {
+	/** Le sac contient-il l'objet du prochain bloc ? Sinon il faut aller au dépôt. */
+	public boolean needsFetch(BuildSite site, Inventory carried) {
 		var peek = site.peek();
-		if (peek.isEmpty()) return new Action(Kind.DONE, null, Map.of());
-		PlanBlock b = peek.get();
-		String item = b.item();
-		if (item == null) return new Action(Kind.PLACE, b, Map.of());
-		if (town.stockpile.has(item, 1)) {
-			town.stockpile.remove(item, 1);
-			return new Action(Kind.PLACE, b, Map.of());
-		}
-		int batch = Math.max(1, site.currentLayerNeeds().getOrDefault(item, 1));
-		ConversionPlanner.Result r = planner.plan(town.stockpile, item, batch);
-		if (!r.complete() && batch > 1) r = planner.plan(town.stockpile, item, 1);
-		if (r.complete()) {
-			ConversionPlanner.apply(town.stockpile, r.steps());
-			if (town.stockpile.remove(item, 1)) return new Action(Kind.PLACE, b, Map.of());
-		}
-		return new Action(Kind.WAIT, b, new TreeMap<>(r.missing()));
+		if (peek.isEmpty()) return false;
+		String item = peek.get().item();
+		return item != null && !carried.has(item, 1);
 	}
 
-	public void refund(Town town, PlanBlock b) {
-		if (b.item() != null) town.stockpile.add(b.item(), 1);
+	/**
+	 * Prépare le prochain bloc. PLACE : l'objet a été retiré du sac ; le code Minecraft pose le bloc puis appelle site.advance()
+	 * (ou refund() en cas d'échec). FETCH : il faut aller au dépôt.
+	 */
+	public Action next(BuildSite site, Inventory carried) {
+		var peek = site.peek();
+		if (peek.isEmpty()) return new Action(Kind.DONE, null);
+		PlanBlock b = peek.get();
+		if (b.item() == null) return new Action(Kind.PLACE, b);
+		if (carried.remove(b.item(), 1)) return new Action(Kind.PLACE, b);
+		return new Action(Kind.FETCH, b);
+	}
+
+	/** Ce qu'il faudrait avoir dans le sac pour enchaîner le plus de blocs possible (limité par la place). */
+	public Map<String, Integer> wantList(BuildSite site) {
+		Inventory sim = new Inventory();
+		Map<String, Integer> want = new LinkedHashMap<>();
+		for (PlanBlock b : site.upcoming(LOOKAHEAD_BLOCKS)) {
+			if (b.item() == null) continue;
+			if (sim.add(b.item(), 1) > 0) break;
+			want.merge(b.item(), 1, Integer::sum);
+		}
+		return want;
+	}
+
+	/** Au dépôt : fabrique et recharge le sac. */
+	public Logistics.FetchResult fetch(Town town, BuildSite site, Inventory carried) {
+		return Logistics.fetch(town, planner, carried, wantList(site));
+	}
+
+	public void refund(Inventory carried, PlanBlock b) {
+		if (b.item() != null) carried.add(b.item(), 1);
 	}
 }

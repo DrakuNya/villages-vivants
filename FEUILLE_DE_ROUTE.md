@@ -2,9 +2,9 @@
 
 Mod Fabric pour Minecraft **26.3** (Java 25). Les villageois élisent un **maire** (ruban d'élu), un **constructeur** (maillet) bâtit les **plans** posés par le maire, et d'autres métiers alimentent le chantier.
 
-> **État : phase A testée en jeu (objets, élection du maire/constructeur), phase B écrite mais pas encore lancée.**
-> La logique « pure » (dossier `core/`) est **testée** (106 000+ vérifications, `tools/CoreSelfTest.java`, y compris une ville simulée de A à Z dans 3 biomes).
-> Le code Minecraft de la phase B (`mc/Director`, `mc/TerrainAdapter`, nouvelles commandes) n'a **jamais été compilé ni lancé** : il utilise les mêmes classes que la phase A plus quelques nouvelles (voir §4).
+> **État : phase A testée en jeu (objets, élection du maire/constructeur) ; phases B (maire autonome) et C (inventaires) écrites mais pas encore lancées.**
+> La logique « pure » (dossier `core/`) est **testée** par `tools/CoreSelfTest.java` : une centaine de scénarios distincts (le compteur affiché à la fin est bien plus gros parce qu'une boucle revérifie chaque bloc de chaque plan dans chaque style et rotation). Dont : une ville simulée de A à Z dans 3 biomes, et chaque plan construit dans chaque style **sans aucun matériau de départ**, uniquement par les récoltes, dépôts et fabrications des villageois.
+> Le code Minecraft des phases B et C (`mc/Director`, `mc/TerrainAdapter`, nouvelles commandes) n'a **jamais été compilé ni lancé** : il utilise les mêmes classes que la phase A plus quelques nouvelles (voir §4). Les tests ne prouvent rien sur le comportement réel dans Minecraft (déplacements, API), seulement sur la logique.
 
 ---
 
@@ -31,8 +31,9 @@ Mod Fabric pour Minecraft **26.3** (Java 25). Les villageois élisent un **maire
 3. Le mode automatique est **actif par défaut**. Toutes les ~10 secondes le maire décide d'un bâtiment (message bleu dans le chat). Pour le déclencher tout de suite : `/lv decide`. Pour reprendre la main : `/lv auto off` (et `/lv auto on` pour le rendre autonome).
 4. Séquence attendue : **puits** au centre → **maisons** (jusqu'à avoir autant de lits que d'habitants) → **fermes** → **lieux de travail** des métiers présents → **tour de garde** → entrepôt, marché, forge…
 5. Pour chaque bâtiment : **terrassement** (le terrain est aplani et dégagé, message « Terrain prêt »), puis panneau, puis construction étage par étage par les constructeurs (jusqu'à 3 par chantier). Quand il n'y a plus de chantier, les constructeurs **posent les chemins** reliant chaque porte à la place centrale, puis les **lampadaires** (torches, une toutes les 6 cases).
-6. Donne-leur des matériaux de départ pour accélérer : `/lv stock oak_log 200`, `/lv stock cobblestone 200`, `/lv stock sand 40`, `/lv stock white_wool 20`, `/lv stock coal 10`, `/lv stock wheat 40`.
-7. `/lv town` montre la file de chantiers (avancement, priorité), les chemins restants, l'entrepôt et le tableau des besoins.
+6. **Inventaires (phase C)** : chaque habitant porte un sac de 8 emplacements (piles de 64, lits seuls, boules de neige par 16...). Les bûcherons, mineurs et bergers **récoltent dans leur sac**, puis **marchent jusqu'au dépôt** (la place centrale, puis un coffre de l'entrepôt une fois celui-ci construit) pour y déposer. Les constructeurs, quand il leur manque l'objet du prochain bloc, **vont au dépôt, y fabriquent** (2 bûches → planches → portes...) **et repartent avec le sac chargé**. Les lampadaires prennent leur torche dans le sac du cantonnier. Pour voir un sac : **accroupi + clic droit à main vide** sur un habitant, ou `/lv inv` (tous les sacs et le dépôt).
+7. Donne-leur des matériaux de départ pour accélérer : `/lv stock oak_log 200`, `/lv stock cobblestone 200`, `/lv stock sand 40`, `/lv stock white_wool 20`, `/lv stock coal 10`, `/lv stock wheat 40`.
+8. `/lv town` montre la file de chantiers (avancement, priorité), les chemins restants, l'entrepôt et le tableau des besoins.
 
 Ce que fait chaque métier **pour l'instant** : constructeur (bâtit, aplanit, trace les chemins), bûcheron (bûches), mineur (pierre, sable, terre, charbon, neige), berger (laine des moutons proches, 1 à 3 par tonte). Les autres métiers déclenchent leurs bâtiments mais n'ont pas encore de tâche (phase D).
 
@@ -49,7 +50,8 @@ core/   (aucune dépendance à Minecraft — testé)
   Role                           métiers et ce que chacun sait produire
   TownBoard                      tableau des besoins (les chantiers publient, les ouvriers prennent)
   Market                         marché interne entre villageois (jetons)
-  Town, TownStore                ville + sauvegarde texte (format v2, lit toujours le v1)
+  Inventory, Logistics, WorkerLogic  sacs des villageois, tours au dépôt (fabrication + chargement), cerveau des ouvriers de récolte
+  Town, TownStore                ville + sauvegarde texte (format v2, lit toujours le v1) ; sacs inclus
   MayorPlanner                   « de quoi la ville a-t-elle besoin ? » (puits, lits, nourriture, défense, ateliers...)
   SitePlacer, TerrainView        où construire : lots autour de la place, sans chevauchement, évite l'eau et les pentes
   SitePrep                       terrassement : remblais, déblais, herbe
@@ -90,6 +92,12 @@ Principe : **le cerveau (core) décide, Minecraft (mc) exécute.** Tout ce qui e
 - [ ] Un seul monde géré : le Overworld
 - [ ] Les villageois non chargés (loin du joueur) ne travaillent pas
 
+### Nouveaux points à vérifier (phase C)
+- [ ] Les villageois vont-ils bien au dépôt et en reviennent-ils ? (même fragilité de déplacement)
+- [ ] Un constructeur qui attend un objet reste au dépôt : vérifier qu'il n'y a pas de blocage quand une matière première n'existe pas dans les environs (ex : pas de moutons → pas de lits)
+- [ ] Accroupi + main vide sur un habitant : ne remplace le commerce que pour les habitants ayant un métier
+- [ ] Les bergers : la laine vient des moutons proches (1 à 3 par tonte, repos de 60 s)
+
 ### Nouveaux points à vérifier (phase B)
 - [ ] `TerrainAdapter` : `hasChunkAt`, `canBeReplaced()`, `getFluidState()`, `isAir()` (noms de la 26.3)
 - [ ] `getEntitiesOfClass(Class, AABB, Predicate)` pour compter les villageois et trouver les moutons ; classe `Mob`
@@ -119,11 +127,18 @@ Principe : **le cerveau (core) décide, Minecraft (mc) exécute.** Tout ce qui e
 - [ ] Le maire choisit l'emplacement en tenant compte des **bâtiments déjà existants du village** (aujourd'hui il ne voit que les siens)
 - [ ] Voies principales (grille) et places, au lieu de chemins qui s'accrochent à l'existant
 
-### Phase C — inventaires et stocks réels
-- [ ] **Inventaire pour chaque villageois** (les 8 emplacements vanilla) : ce qu'il porte, ce qu'il dépose
-- [ ] **Entrepôt réel** : coffres/tonneaux de la ville (le « dépôt »), les ouvriers y livrent, le constructeur y puise
-- [ ] Transport : un porteur/messager déplace les ressources entre dépôts et chantiers
+### Phase C — inventaires et stocks — **inventaires écrits, coffres réels à faire**
+- [x] **Inventaire pour chaque villageois** : 8 emplacements, limites de pile, sauvegardés dans la ville (ce sac est virtuel : il n'utilise pas l'inventaire interne des villageois de Minecraft)
+- [x] Les récolteurs travaillent avec leur sac et **déposent au dépôt** ; les commandes du tableau ne sont soldées qu'au dépôt
+- [x] Les constructeurs construisent **depuis leur sac** et font des **tours au dépôt** pour se recharger ; la fabrication (planches, portes...) se fait au dépôt
+- [x] Le dépôt est un lieu réel : la place centrale, puis un **coffre de l'entrepôt** construit ; les villageois marchent jusqu'à lui
+- [x] Voir le sac d'un villageois (accroupi + main vide), `/lv inv`
+- [ ] **Coffres réels** : le contenu de l'entrepôt est encore un registre virtuel ; faire correspondre les coffres du monde (et accepter que le joueur y prenne ou y dépose des objets)
+- [ ] Utiliser le **vrai inventaire** des villageois de Minecraft (8 emplacements) au lieu du sac virtuel
+- [ ] **Porteur/messager** : déplace les ressources entre plusieurs dépôts et les chantiers
+- [ ] Plusieurs ouvriers sur la même commande (aujourd'hui une commande = un ouvrier à la fois)
 - [ ] Panneau en vrai **écran** (GUI) plutôt que chat : liste verte/grise, jauge d'avancement
+- [ ] Récupérer le sac d'un villageois mort (aujourd'hui il est perdu)
 
 ### Phase D — métiers (chacun avec son meuble de métier et son rôle dans l'économie)
 - [ ] **Bûcheron** : replante des pousses, évite de raser la forêt, hache

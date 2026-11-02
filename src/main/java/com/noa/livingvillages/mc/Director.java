@@ -2,6 +2,8 @@ package com.noa.livingvillages.mc;
 
 import com.noa.livingvillages.core.BuildSite;
 import com.noa.livingvillages.core.BuilderLogic;
+import com.noa.livingvillages.core.Inventory;
+import com.noa.livingvillages.core.Logistics;
 import com.noa.livingvillages.core.MayorBrain;
 import com.noa.livingvillages.core.PlanBlock;
 import com.noa.livingvillages.core.RoadCell;
@@ -10,6 +12,7 @@ import com.noa.livingvillages.core.Role;
 import com.noa.livingvillages.core.SitePrep;
 import com.noa.livingvillages.core.Town;
 import com.noa.livingvillages.core.TownBoard;
+import com.noa.livingvillages.core.WorkerLogic;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -186,6 +189,26 @@ public final class Director {
 		level.setBlock(pos, Blocks.OAK_SIGN.defaultBlockState(), 3);
 	}
 
+	// ------------------------------------------------------------------ dépôt
+
+	/** Où se trouve le dépôt : un coffre de l'entrepôt s'il est construit, sinon la place centrale. */
+	static BlockPos depotPos(ServerLevel level, Town town) {
+		int[] chest = town.depotChest();
+		if (chest != null) return new BlockPos(chest[0], chest[1], chest[2]);
+		TerrainAdapter terrain = new TerrainAdapter(level, town.centerY);
+		return new BlockPos(town.centerX, terrain.groundY(town.centerX, town.centerZ) + 1, town.centerZ);
+	}
+
+	/** Marche vers le dépôt ; renvoie vrai quand on est assez près pour y travailler. */
+	private static boolean atDepot(ServerLevel level, Town town, Villager v) {
+		BlockPos depot = depotPos(level, town);
+		if (v.blockPosition().distSqr(depot) > REACH_SQ) {
+			walkTo(v, depot);
+			return false;
+		}
+		return true;
+	}
+
 	// ------------------------------------------------------------------ constructeur
 
 	private static void walkTo(Villager v, BlockPos pos) {
@@ -193,12 +216,20 @@ public final class Director {
 	}
 
 	private static void builder(ServerLevel level, Town town, Villager villager, BuildSite site) {
+		Inventory bag = town.inventoryOf(villager.getUUID().toString());
 		if (site == null) {
-			roads(level, town, villager);
+			roads(level, town, villager, bag);
 			return;
 		}
 		var peek = site.peek();
 		if (peek.isEmpty()) return;
+		// il manque l'objet du prochain bloc : tour au dépôt, on y fabrique et on recharge le sac
+		if (LOGIC.needsFetch(site, bag)) {
+			if (!atDepot(level, town, villager)) return;
+			Logistics.FetchResult r = LOGIC.fetch(town, site, bag);
+			if (r.movedAnything()) Towns.markDirty();
+			if (LOGIC.needsFetch(site, bag)) return; // toujours rien pour le prochain bloc : on attend au dépôt
+		}
 		PlanBlock next = peek.get();
 		int[] w = site.worldPos(next);
 		BlockPos target = new BlockPos(w[0], w[1], w[2]);
@@ -206,11 +237,11 @@ public final class Director {
 			walkTo(villager, target);
 			return;
 		}
-		BuilderLogic.Action a = LOGIC.next(town, site);
-		if (a.kind() != BuilderLogic.Kind.PLACE) return; // en attente de ressources (le tableau des besoins s'en charge)
+		BuilderLogic.Action a = LOGIC.next(site, bag);
+		if (a.kind() != BuilderLogic.Kind.PLACE) return;
 		BlockState state = BlockUtil.parse(a.block().block());
 		if (state == null) {
-			LOGIC.refund(town, a.block());
+			LOGIC.refund(bag, a.block());
 			site.advance(); // bloc inconnu dans cette version : on le saute
 			Towns.markDirty();
 			return;
@@ -226,9 +257,15 @@ public final class Director {
 
 	// ------------------------------------------------------------------ chemins et lampadaires
 
-	private static void roads(ServerLevel level, Town town, Villager villager) {
+	private static void roads(ServerLevel level, Town town, Villager villager, Inventory bag) {
 		RoadCell cell = ROADS.peekTarget(town);
 		if (cell == null) return;
+		// lampadaire à poser sans torche dans le sac : tour au dépôt
+		if (ROADS.needsTorch(town, bag)) {
+			if (!atDepot(level, town, villager)) return;
+			if (ROADS.fetchTorches(town, bag).movedAnything()) Towns.markDirty();
+			if (ROADS.needsTorch(town, bag)) return; // pas de torche disponible : on attend
+		}
 		TerrainAdapter terrain = new TerrainAdapter(level, town.centerY);
 		int y = terrain.groundY(cell.x, cell.z);
 		BlockPos ground = new BlockPos(cell.x, y, cell.z);
@@ -236,7 +273,7 @@ public final class Director {
 			walkTo(villager, ground.above());
 			return;
 		}
-		RoadLogic.Action a = ROADS.next(town);
+		RoadLogic.Action a = ROADS.next(town, bag);
 		switch (a.kind()) {
 			case PATH -> {
 				BlockState path = BlockUtil.parse("minecraft:dirt_path");
@@ -318,15 +355,29 @@ public final class Director {
 	}
 
 	private static void gatherer(ServerLevel level, Town town, String id, Role role, Villager villager) {
+		Inventory bag = town.inventoryOf(id);
+		WorkerLogic.Action act = WorkerLogic.next(town, id, role, bag);
+		switch (act.kind()) {
+			case IDLE -> {
+			}
+			case DEPOSIT -> {
+				TASKS.remove(id);
+				if (!atDepot(level, town, villager)) return;
+				town.deposit(id);
+				Towns.markDirty();
+			}
+			case HARVEST -> harvest(level, town, id, villager, bag, act.request());
+		}
+	}
+
+	private static void harvest(ServerLevel level, Town town, String id, Villager villager, Inventory bag, TownBoard.Request req) {
 		Task task = TASKS.get(id);
 		if (task == null) {
-			TownBoard.Request req = town.board.claim(id, role);
-			if (req == null) return;
 			String entityType = entitySourceOf(req.item);
 			if (entityType != null) {
 				Mob animal = findSheep(level, villager.blockPosition(), entityType);
 				if (animal == null) {
-					town.board.release(id);
+					giveUp(town, id);
 					return;
 				}
 				task = new Task(animal.blockPosition(), animal.getUUID(), req);
@@ -334,7 +385,7 @@ public final class Director {
 				List<String> sources = sourcesOf(req.item);
 				BlockPos found = sources.isEmpty() ? null : findNearest(level, villager.blockPosition(), sources);
 				if (found == null) {
-					town.board.release(id); // rien à récolter ici : la demande reste ouverte pour un autre
+					giveUp(town, id); // rien à récolter ici : la demande reste ouverte pour un autre
 					return;
 				}
 				task = new Task(found, null, req);
@@ -345,7 +396,6 @@ public final class Director {
 		if (task.entity() != null) {
 			Entity animal = level.getEntity(task.entity());
 			if (animal == null) {
-				town.board.release(id);
 				TASKS.remove(id);
 				return;
 			}
@@ -356,21 +406,25 @@ public final class Director {
 			return;
 		}
 		if (task.entity() != null) {
-			// « tonte » : le mouton donne 1 à 3 laines, puis se repose un moment
-			int wool = 1 + (int) (ticks % 3);
+			// « tonte » : le mouton donne 1 à 3 laines dans le sac, puis se repose un moment
+			int wool = Math.min(1 + (int) (ticks % 3), bag.room(req.item));
 			SHEARED.put(task.entity(), ticks);
-			town.stockpile.add(task.request().item, wool);
-			town.board.delivered(task.request(), wool);
+			if (wool > 0) bag.add(req.item, wool);
 			Towns.markDirty();
 		} else {
-			List<String> sources = sourcesOf(task.request().item);
-			if (sources.contains(BlockUtil.idOf(level.getBlockState(target)))) {
+			List<String> sources = sourcesOf(req.item);
+			if (sources.contains(BlockUtil.idOf(level.getBlockState(target))) && bag.canAdd(req.item, 1)) {
 				level.destroyBlock(target, false);
-				town.stockpile.add(task.request().item, 1);
-				town.board.delivered(task.request(), 1);
+				bag.add(req.item, 1);
 				Towns.markDirty();
 			}
 		}
 		TASKS.remove(id);
+	}
+
+	/** Rien à récolter : on libère la commande ; avec un sac non vide, l'ouvrier ira déposer au prochain tour. */
+	private static void giveUp(Town town, String id) {
+		TASKS.remove(id);
+		town.board.release(id);
 	}
 }

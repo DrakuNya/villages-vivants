@@ -28,7 +28,13 @@ public final class Interactions {
 			if (!(level instanceof ServerLevel serverLevel) || hand != InteractionHand.MAIN_HAND) return InteractionResult.PASS;
 			if (!(entity instanceof Villager villager) || villager.isBaby()) return InteractionResult.PASS;
 			ItemStack stack = player.getItemInHand(hand);
-			if (stack.isEmpty()) return InteractionResult.PASS;
+			if (stack.isEmpty()) {
+				// main vide + accroupi sur un habitant : on regarde son sac
+				Town t = Towns.ofMember(villager.getUUID().toString());
+				if (t == null || !player.isShiftKeyDown()) return InteractionResult.PASS;
+				showMember(player, t, villager.getUUID().toString());
+				return InteractionResult.SUCCESS;
+			}
 			String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
 			Role role = Role.byItem(itemId);
 			if (role == null) return InteractionResult.PASS;
@@ -99,6 +105,24 @@ public final class Interactions {
 		}
 		if (!player.getAbilities().instabuild) stack.shrink(1);
 		Towns.markDirty();
+	}
+
+	/** Le métier d'un habitant, ce qu'il porte, et ce qu'il est en train de faire. */
+	static void showMember(Player player, Town town, String id) {
+		Role role = town.members.get(id);
+		player.sendSystemMessage(Component.literal("— " + (role == null ? "Habitant" : role.displayName) + " de " + town.name + " —").withStyle(ChatFormatting.GOLD));
+		var bag = town.inventoryOf(id);
+		if (bag.isEmpty()) {
+			player.sendSystemMessage(Component.literal("Sac vide.").withStyle(ChatFormatting.GRAY));
+		} else {
+			for (var e : bag.asMap().entrySet()) {
+				player.sendSystemMessage(Component.literal(" • " + e.getKey().replace("minecraft:", "") + " ×" + e.getValue()).withStyle(ChatFormatting.GREEN));
+			}
+		}
+		var req = town.board.claimedBy(id);
+		if (req != null) {
+			player.sendSystemMessage(Component.literal("Mission : récolter " + req.item.replace("minecraft:", "") + " (reste " + req.qty + ")").withStyle(ChatFormatting.YELLOW));
+		}
 	}
 
 	/** Le panneau : ressources disponibles en vert, manquantes en gris. */
