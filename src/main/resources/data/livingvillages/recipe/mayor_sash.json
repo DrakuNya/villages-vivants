@@ -3,11 +3,12 @@
   "category": "equipment",
   "key": {
     "R": "minecraft:red_wool",
-    "G": "minecraft:gold_ingot"
+    "G": "minecraft:gold_ingot",
+    "E": "minecraft:emerald"
   },
   "pattern": [
     "RRR",
-    "G G"
+    "GEG"
   ],
   "result": {
     "id": "livingvillages:mayor_sash",

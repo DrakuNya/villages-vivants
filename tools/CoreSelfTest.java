@@ -38,16 +38,31 @@ public class CoreSelfTest {
 		Inventory inv = new Inventory();
 		check(inv.add("minecraft:oak_log", 100) == 0 && inv.count("minecraft:oak_log") == 100, "100 bûches tiennent (2 piles)");
 		check(inv.add("minecraft:white_bed", 3) == 0 && inv.count("minecraft:white_bed") == 3, "3 lits = 3 emplacements");
-		check(inv.room("minecraft:white_bed") == 3 && inv.room("minecraft:oak_log") == 28 + 3 * 64, "place restante : " + inv.room("minecraft:white_bed") + " / " + inv.room("minecraft:oak_log"));
-		check(inv.add("minecraft:white_bed", 10) == 7, "seulement 3 lits de plus : 7 refusés");
-		inv.add("minecraft:white_bed", 3);
-		check(inv.room("minecraft:white_bed") == 0 && !inv.canAdd("minecraft:white_bed", 1), "plus de place pour des lits (8 emplacements)");
+		check(inv.room("minecraft:white_bed") == 4 && inv.room("minecraft:oak_log") == 28 + 4 * 64, "place restante : " + inv.room("minecraft:white_bed") + " / " + inv.room("minecraft:oak_log"));
+		check(inv.add("minecraft:white_bed", 10) == 6, "seulement 4 lits de plus : 6 refusés");
+		check(inv.room("minecraft:white_bed") == 0 && !inv.canAdd("minecraft:white_bed", 1), "plus de place pour des lits (9 emplacements)");
 		check(inv.remove("minecraft:oak_log", 70) && inv.count("minecraft:oak_log") == 30 && inv.canAdd("minecraft:white_bed", 1), "retirer des bûches libère de la place");
 		check(!inv.remove("minecraft:oak_log", 31) && inv.count("minecraft:oak_log") == 30, "retrait impossible : tout ou rien");
 		check(inv.copy().drain().count("minecraft:oak_log") == 30 && inv.count("minecraft:oak_log") == 30, "copie indépendante");
 		Inventory sn = new Inventory();
 		sn.add("minecraft:snowball", 40);
-		check(sn.asMap().equals(Map.of("minecraft:snowball", 40)) && sn.room("minecraft:snowball") == 16 * 5 + 8, "boules de neige : piles de 16");
+		check(sn.asMap().equals(Map.of("minecraft:snowball", 40)) && sn.room("minecraft:snowball") == 16 * 6 + 8, "boules de neige : piles de 16");
+
+		// --- accès par emplacement (écran d'inventaire)
+		Inventory sl = new Inventory();
+		sl.add("minecraft:oak_log", 70);
+		check("minecraft:oak_log".equals(sl.itemAt(0)) && sl.countAt(0) == 64 && sl.countAt(1) == 6 && sl.itemAt(2) == null, "lecture par emplacement");
+		sl.setSlot(3, "minecraft:diamond", 5);
+		sl.setSlot(0, null, 0);
+		check(sl.count("minecraft:diamond") == 5 && sl.count("minecraft:oak_log") == 6 && sl.itemAt(0) == null, "écriture par emplacement");
+		Inventory sl2 = new Inventory();
+		for (int i = 0; i < Inventory.SLOTS; i++) sl2.setSlot(i, sl.itemAt(i), sl.countAt(i));
+		check(sl2.asMap().equals(sl.asMap()), "recopie emplacement par emplacement");
+
+		// --- objets utiles à la ville (ramassage des objets jetés)
+		java.util.Set<String> known = RecipeBook.defaults().knownItems();
+		check(known.contains("minecraft:oak_log") && known.contains("minecraft:oak_door") && known.contains("minecraft:stick") && !known.contains("minecraft:rotten_flesh"),
+				"objets connus de la table de recettes");
 
 		// --- tour au dépôt : on fabrique au dépôt et on repart avec le résultat dans le sac
 		Town t = new Town("c", "Cville");
@@ -67,7 +82,7 @@ public class CoreSelfTest {
 		Town t3 = new Town("c3", "C3");
 		t3.stockpile.add("minecraft:cobblestone", 1000);
 		Inventory b3 = new Inventory();
-		for (int i = 0; i < 7; i++) b3.add("minecraft:white_bed", 1);
+		for (int i = 0; i < 8; i++) b3.add("minecraft:white_bed", 1);
 		Logistics.fetch(t3, planner, b3, Map.of("minecraft:cobblestone", 500));
 		check(b3.count("minecraft:cobblestone") == 64 && t3.stockpile.count("minecraft:cobblestone") == 1000 - 64, "un seul emplacement libre : 64 pierres seulement");
 
@@ -95,6 +110,21 @@ public class CoreSelfTest {
 		wb.board.sync("s1", Map.of("minecraft:oak_log", 10));
 		check(WorkerLogic.next(wb, "m1", Role.MINER, new Inventory()).kind() == WorkerLogic.Kind.IDLE, "le mineur ne prend pas une commande de bûches");
 		check(WorkerLogic.next(wb, "l1", Role.LUMBERJACK, new Inventory()).kind() == WorkerLogic.Kind.HARVEST, "le bûcheron la prend");
+
+		// --- un habitant disparaît : sac récupéré, commande libérée, mairie vacante
+		Town gone = new Town("gone", "Gone");
+		gone.mayorId = "maire";
+		gone.members.put("maire", Role.MAYOR);
+		gone.members.put("l9", Role.LUMBERJACK);
+		gone.board.sync("s1", Map.of("minecraft:oak_log", 20));
+		gone.board.claim("l9", Role.LUMBERJACK);
+		gone.inventoryOf("l9").add("minecraft:oak_log", 12);
+		check(gone.removeMember("l9") && !gone.members.containsKey("l9") && gone.stockpile.count("minecraft:oak_log") == 12, "habitant disparu : son sac revient à l'entrepôt");
+		check(gone.board.claimedBy("l9") == null && gone.board.claim("l10", Role.LUMBERJACK) != null, "sa commande est libérée pour un autre ouvrier");
+		check(!gone.removeMember("inconnu"), "membre inconnu : rien ne se passe");
+		gone.removeMember("maire");
+		check(gone.mayorId == null && MayorBrain.think(gone, cat, new Fake((x, z) -> 70, (x, z) -> false), "minecraft:plains", 6).isEmpty(), "maire disparu : mairie vacante, plus de décisions");
+		check(Role.byItem("minecraft:emerald") == null && Role.byItem("minecraft:gold_ingot") == Role.MERCHANT, "l'émeraude se donne (don), le lingot d'or fait un marchand");
 
 		// --- sauvegarde des sacs
 		Town sv = new Town("sv", "Sv");
@@ -132,11 +162,18 @@ public class CoreSelfTest {
 
 	/** Renvoie le nombre de tours nécessaires pour finir le plan, ou -1 si ça bloque. */
 	static int runPipeline(BuildPlan plan, Theme theme, BuilderLogic logic, ConversionPlanner planner) {
+		return runPipeline(plan, theme, logic, planner, false);
+	}
+
+	/** scarce = vrai : ni charbon ni émeraude dans le monde ; les mineurs ne les trouvent qu'en fouillant (récompenses de travail). */
+	static int runPipeline(BuildPlan plan, Theme theme, BuilderLogic logic, ConversionPlanner planner, boolean scarce) {
+		Random rng = new Random(42);
 		Town t = new Town("sim", "Sim");
 		t.mayorId = "m";
 		String[] ids = {"b1", "b2", "l1", "l2", "m1", "m2", "s1"};
 		Role[] roles = {Role.BUILDER, Role.BUILDER, Role.LUMBERJACK, Role.LUMBERJACK, Role.MINER, Role.MINER, Role.SHEPHERD};
 		for (int i = 0; i < ids.length; i++) t.members.put(ids[i], roles[i]);
+		if (!scarce) t.stockpile.add("minecraft:emerald", Settlement.TREASURY_EMERALDS);
 		BuildSite site = new BuildSite("sim-c1", plan, theme, 0, 64, 0, 0, 0);
 		t.sites.add(site);
 		for (int iter = 1; iter <= 60000; iter++) {
@@ -154,7 +191,23 @@ public class CoreSelfTest {
 				} else {
 					WorkerLogic.Action a = WorkerLogic.next(t, ids[i], r, inv);
 					if (a.kind() == WorkerLogic.Kind.HARVEST) {
-						if (inv.add(a.request().item, 1) != 0) return -2;
+						String want = a.request().item;
+						boolean noOre = scarce && (want.equals("minecraft:coal") || want.equals("minecraft:emerald"));
+						if (noOre) {
+							// fouille : on casse de la pierre au hasard et on tire les récompenses (ciblées, chance triplée)
+							if (!WorkRewards.canFind(r, want)) return -4;
+							inv.add("minecraft:cobblestone", 1);
+							for (Map.Entry<String, Integer> rw : WorkRewards.roll(r, want, 1.0, 3.0, rng).entrySet()) {
+								int rest = inv.add(rw.getKey(), rw.getValue());
+								if (rest > 0) t.stockpile.add(rw.getKey(), rest);
+							}
+						} else if (inv.add(want, 1) != 0) return -2;
+						if (r != Role.BUILDER && !noOre) {
+							for (Map.Entry<String, Integer> rw : WorkRewards.roll(r, rng).entrySet()) {
+								int rest = inv.add(rw.getKey(), rw.getValue());
+								if (rest > 0) t.stockpile.add(rw.getKey(), rest);
+							}
+						}
 					} else if (a.kind() == WorkerLogic.Kind.DEPOSIT) {
 						t.deposit(ids[i]);
 					}
@@ -164,6 +217,338 @@ public class CoreSelfTest {
 			if (site.complete()) return iter;
 		}
 		return -1;
+	}
+
+	/** Surface du rectangle englobant de tous les bâtiments. */
+	static long boundingArea(Town t) {
+		int x0 = Integer.MAX_VALUE, z0 = Integer.MAX_VALUE, x1 = Integer.MIN_VALUE, z1 = Integer.MIN_VALUE;
+		for (BuildSite s : t.sites) {
+			int[] f = s.footprint();
+			x0 = Math.min(x0, f[0]);
+			z0 = Math.min(z0, f[1]);
+			x1 = Math.max(x1, f[2]);
+			z1 = Math.max(z1, f[3]);
+		}
+		return (long) (x1 - x0 + 1) * (z1 - z0 + 1);
+	}
+
+	static Town growTown(PlanCatalog cat, boolean dense, TerrainView terrain, String biome, int pop, List<String> order) {
+		Town t = new Town("d", "Dville");
+		t.mayorId = "maire";
+		t.members.put("maire", Role.MAYOR);
+		String[] ids = {"b1", "b2", "l1", "m1", "s1", "e1", "c1", "g1"};
+		Role[] roles = {Role.BUILDER, Role.BUILDER, Role.LUMBERJACK, Role.MINER, Role.SHEPHERD, Role.BREEDER, Role.COOK, Role.GUARD};
+		for (int i = 0; i < ids.length; i++) t.members.put(ids[i], roles[i]);
+		t.centerX = 100;
+		t.centerZ = -50;
+		t.dense = dense;
+		for (int i = 0; i < 200; i++) {
+			var c = MayorBrain.think(t, cat, terrain, biome, pop);
+			if (c.isEmpty()) break;
+			order.add(c.get().site().plan.name);
+			BuildSite s = c.get().site();
+			s.prepDone = true;
+			while (!s.complete()) s.advance();
+		}
+		return t;
+	}
+
+	/** Phase D : ville compacte (îlots, rues étroites, murs mitoyens, bâtiment central). */
+	static void phaseD(PlanCatalog cat, ConversionPlanner planner) {
+		// --- murs mitoyens : deux petites maisons côte à côte partagent une ligne de mur
+		BuildPlan pm = cat.get("petite_maison");
+		BuildSite a = new BuildSite("a", pm, Theme.PLAINS, 0, 70, 0, 0, 0);
+		BuildSite b = new BuildSite("b", pm, Theme.PLAINS, 4, 70, 0, 0, 0); // la colonne x = 4 est commune
+		int sh = SharedWalls.compatibleOverlap(b, List.of(a));
+		check(sh > 0, "deux maisons collées partagent des blocs de mur : " + sh);
+		BuildSite c = new BuildSite("c", pm, Theme.PLAINS, 3, 70, 0, 0, 0); // 2 colonnes communes : intérieurs superposés
+		check(SharedWalls.compatibleOverlap(c, List.of(a)) == -1, "intérieurs superposés : refusé");
+		BuildSite d = new BuildSite("d", pm, Theme.PLAINS, 0, 70, 4, 0, 0); // la rangée z = 4 est commune... avec la porte de a
+		check(SharedWalls.compatibleOverlap(d, List.of(a)) == -1, "porte sur le mur partagé : refusé");
+		Town two = new Town("two", "Two");
+		two.dense = true;
+		two.sites.add(a);
+		two.sites.add(b);
+		int totalBefore = b.total();
+		int dropped = SharedWalls.apply(two, b);
+		check(dropped == sh && b.total() == totalBefore - dropped, "les blocs déjà fournis par le voisin sont retirés : " + dropped + " / " + sh);
+		java.util.Set<Long> union = new HashSet<>(a.blockMap().keySet());
+		int dup = 0;
+		for (Long k : b.blockMap().keySet()) if (!union.add(k)) dup++;
+		check(dup == 0, "plus aucun bloc en double après le mur mitoyen");
+
+		for (String biome : new String[]{"minecraft:plains", "minecraft:snowy_plains", "minecraft:desert"}) {
+			Fake terrain = new Fake((x, z) -> 64 + (int) Math.round(1.5 * Math.sin(x / 9.0) + 1.0 * Math.cos(z / 7.0)),
+					(x, z) -> (x - 140) * (x - 140) + (z + 50) * (z + 50) < 8 * 8);
+			List<String> order = new ArrayList<>();
+			Town t = growTown(cat, true, terrain, biome, 12, order);
+			check(!order.isEmpty() && order.get(0).equals("mairie"), biome + " : le premier bâtiment est la mairie : " + order);
+			BuildSite hall = t.sites.get(0);
+			int[] hf = hall.footprint();
+			check(Math.abs((hf[0] + hf[2]) / 2 - t.centerX) <= 1 && Math.abs((hf[1] + hf[3]) / 2 - t.centerZ) <= 1, biome + " : mairie au centre");
+			int ringCells = 0;
+			for (RoadCell rc : t.roads.values()) if (Math.max(Math.abs(rc.x - t.centerX), Math.abs(rc.z - t.centerZ)) == DenseLayout.STREET) ringCells++;
+			check(ringCells >= 40, biome + " : anneau de rues autour de la mairie (" + ringCells + " cases)");
+			// aucun chevauchement d'intérieurs, murs mitoyens compatibles, blocs sans doublon
+			java.util.Set<Long> allKeys = new HashSet<>();
+			long keyCount = 0;
+			int touching = 0;
+			for (int i = 0; i < t.sites.size(); i++) {
+				BuildSite s = t.sites.get(i);
+				keyCount += s.blockMap().size();
+				allKeys.addAll(s.blockMap().keySet());
+				int[] f = s.footprint();
+				check(i == 0 || SharedWalls.compatibleOverlap(s, t.sites.subList(0, i)) >= 0, biome + " : " + s.plan.name + " compatible avec ses voisins");
+				for (int j = 0; j < i; j++) {
+					int[] g = t.sites.get(j).footprint();
+					int x0 = Math.max(f[0], g[0]), x1 = Math.min(f[2], g[2]), z0 = Math.max(f[1], g[1]), z1 = Math.min(f[3], g[3]);
+					if (x0 <= x1 && z0 <= z1) {
+						touching++;
+						check(x1 - x0 == 0 || z1 - z0 == 0, biome + " : contact mince entre " + s.plan.name + " et " + t.sites.get(j).plan.name);
+					}
+				}
+				if (i > 0) {
+					// dans un îlot : jamais sur une rue ni dans l'îlot central ; porte sur une rue ; porte non bouchée
+					for (int x = f[0]; x <= f[2]; x++) {
+						for (int z = f[1]; z <= f[3]; z++) {
+							check(!DenseLayout.isStreet(t, x, z), biome + " : " + s.plan.name + " empiète sur une rue");
+							check(Math.abs(x - t.centerX) > DenseLayout.HALF || Math.abs(z - t.centerZ) > DenseLayout.HALF, biome + " : " + s.plan.name + " dans l'îlot central");
+							check(!terrain.blocked(x, z), biome + " : bâtiment dans le lac");
+						}
+					}
+					int[] fr = s.frontCell();
+					check(DenseLayout.isStreet(t, fr[0], fr[1]), biome + " : la porte de " + s.plan.name + " donne sur une rue");
+					for (BuildSite o : t.sites) {
+						int[] g = o.footprint();
+						check(!(fr[0] >= g[0] && fr[0] <= g[2] && fr[1] >= g[1] && fr[1] <= g[3]), biome + " : porte de " + s.plan.name + " bouchée");
+					}
+				}
+			}
+			check(keyCount == allKeys.size(), biome + " : aucun bloc en double dans toute la ville (" + keyCount + " / " + allKeys.size() + ")");
+			check(touching > 0, biome + " : des bâtiments se touchent (murs mitoyens) : " + touching);
+			// toutes les portes sont reliées à l'anneau par des cases de chemin
+			Set<Long> reach = new HashSet<>();
+			java.util.ArrayDeque<long[]> q = new java.util.ArrayDeque<>();
+			for (RoadCell rc : t.roads.values()) {
+				if (Math.max(Math.abs(rc.x - t.centerX), Math.abs(rc.z - t.centerZ)) == DenseLayout.STREET && reach.add(rc.key())) q.add(new long[]{rc.x, rc.z});
+			}
+			while (!q.isEmpty()) {
+				long[] cc = q.poll();
+				for (int[] dd : new int[][]{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+					long k = RoadCell.key((int) cc[0] + dd[0], (int) cc[1] + dd[1]);
+					if (t.roads.containsKey(k) && reach.add(k)) q.add(new long[]{cc[0] + dd[0], cc[1] + dd[1]});
+				}
+			}
+			for (BuildSite s : t.sites) {
+				if (s == hall) continue;
+				int[] fr = s.frontCell();
+				check(reach.contains(RoadCell.key(fr[0], fr[1])), biome + " : la porte de " + s.plan.name + " est reliée au réseau de rues");
+			}
+			for (RoadCell rc : t.roads.values()) {
+				check(DenseLayout.isStreet(t, rc.x, rc.z), biome + " : chemin hors des rues");
+				for (BuildSite s : t.sites) {
+					int[] f = s.footprint();
+					check(!(rc.x >= f[0] && rc.x <= f[2] && rc.z >= f[1] && rc.z <= f[3]), biome + " : rue dans un bâtiment");
+				}
+			}
+			// terrassement : jamais sur les murs des voisins
+			for (BuildSite s : t.sites) {
+				java.util.Set<Long> others = t.footprintCellsExcept(s);
+				for (SitePrep.Op op : SitePrep.compute(s, terrain, others)) check(!others.contains(RoadCell.key(op.x(), op.z())), biome + " : terrassement sur un voisin");
+			}
+			// plus compact que la ville espacée
+			List<String> order2 = new ArrayList<>();
+			Town spaced = growTown(cat, false, terrain, biome, 12, order2);
+			long dense = boundingArea(t), spread = boundingArea(spaced);
+			System.out.println("  compacte " + biome + " : " + t.sites.size() + " bâtiments sur " + dense + " cases, contre " + spaced.sites.size() + " sur " + spread + " (espacée) ; " + touching + " contacts ; " + t.roads.size() + " cases de rue");
+			check(dense < spread, biome + " : la ville compacte occupe moins de place (" + dense + " < " + spread + ")");
+			int housing = 0;
+			for (BuildSite s : t.sites) if (s.plan.meta.category().equals("house")) housing += s.plan.meta.capacity();
+			check(housing >= 16, biome + " : assez de lits en ville compacte (" + housing + ") " + order);
+			// sauvegarde : mode, murs mitoyens et progression
+			BuildSite mid = t.sites.get(t.sites.size() - 1);
+			Town rb = TownStore.read(TownStore.write(List.of(t)), cat).get(0);
+			check(rb.dense && rb.sites.size() == t.sites.size() && rb.sites.get(rb.sites.size() - 1).total() == mid.total(), biome + " : sauvegarde de la ville compacte (blocs mitoyens retirés à l'identique)");
+		}
+
+		// centre déjà occupé (un village existant) : la ville compacte se décale jusqu'à trouver de la place
+		Fake occupied = new Fake((x, z) -> 70, (x, z) -> (x - 100) * (x - 100) + (z + 50) * (z + 50) < 10 * 10);
+		Town reloc = new Town("r", "R");
+		reloc.mayorId = "m";
+		reloc.members.put("m", Role.MAYOR);
+		reloc.centerX = 100;
+		reloc.centerZ = -50;
+		reloc.dense = true;
+		var firstR = MayorBrain.think(reloc, cat, occupied, "minecraft:plains", 6);
+		check(firstR.isPresent() && firstR.get().site().plan.name.equals("mairie"), "centre occupé : la mairie est quand même construite");
+		check(Math.hypot(reloc.centerX - 100, reloc.centerZ + 50) >= 10, "le centre de la ville a été décalé hors de la zone occupée : " + reloc.centerX + "," + reloc.centerZ);
+		if (firstR.isPresent()) {
+			int[] rf = firstR.get().site().footprint();
+			for (int x = rf[0]; x <= rf[2]; x++) for (int z = rf[1]; z <= rf[3]; z++) check(!occupied.blocked(x, z), "mairie hors de la zone occupée");
+		}
+		Fake allBlocked = new Fake((x, z) -> 70, (x, z) -> true);
+		Town none = new Town("n", "N");
+		none.mayorId = "m";
+		none.members.put("m", Role.MAYOR);
+		none.dense = true;
+		check(MayorBrain.think(none, cat, allBlocked, "minecraft:plains", 6).isEmpty() && none.centerX == 0 && none.sites.isEmpty(), "aucune place : rien n'est construit et le centre ne bouge pas");
+
+		// lits : des paires tête/pied bien formées dans tous les plans, et capacité = nombre de lits
+		for (BuildPlan p : cat.all()) {
+			for (Theme th : Theme.values()) {
+				for (int rot = 0; rot < 4; rot++) {
+					List<PlanBlock> bl = p.blocks(th, rot);
+					Map<String, PlanBlock> at = new java.util.HashMap<>();
+					for (PlanBlock pb : bl) at.put(pb.dx() + "," + pb.dy() + "," + pb.dz(), pb);
+					for (PlanBlock pb : bl) {
+						if (!pb.block().contains("white_bed[part=foot")) continue;
+						String facing = pb.block().replaceAll(".*facing=(\\w+).*", "$1");
+						int dx = facing.equals("east") ? 1 : facing.equals("west") ? -1 : 0;
+						int dz = facing.equals("south") ? 1 : facing.equals("north") ? -1 : 0;
+						PlanBlock head = at.get((pb.dx() + dx) + "," + pb.dy() + "," + (pb.dz() + dz));
+						check(head != null && head.block().contains("part=head") && head.block().contains("facing=" + facing),
+								p.name + " rot" + rot + " : le lit (pied " + pb.dx() + "," + pb.dz() + ", " + facing + ") a sa tête à côté");
+					}
+				}
+			}
+			if (p.meta.category().equals("house")) {
+				int beds = p.totalNeeds(Theme.PLAINS).getOrDefault("minecraft:white_bed", 0);
+				check(beds == p.meta.capacity(), p.name + " : capacité (" + p.meta.capacity() + ") = nombre de lits (" + beds + ")");
+			}
+		}
+
+		// règle « lits posés » : tant que (lits finis) < 1,3 x habitants, que des maisons ; on attend si assez sont en route
+		Town hr = new Town("hr", "Hr");
+		hr.mayorId = "m";
+		hr.members.put("m", Role.MAYOR);
+		var firstHr = MayorPlanner.candidates(hr, cat, "minecraft:plains", 4);
+		check(!firstHr.isEmpty() && cat.get(firstHr.get(0).plan().name).meta.category().equals("house") && firstHr.size() == 1, "aucun lit : seulement une maison");
+		for (int i = 0; i < 2; i++) {
+			BuildSite hs = new BuildSite("hr-c" + (i + 1), cat.get("petite_maison"), Theme.PLAINS, i * 30, 70, 0, 0, 0);
+			while (!hs.complete()) hs.advance();
+			hr.sites.add(hs);
+		}
+		BuildSite inProgress = new BuildSite("hr-c3", cat.get("petite_maison"), Theme.PLAINS, 90, 70, 0, 0, 0);
+		hr.sites.add(inProgress);
+		check(MayorPlanner.candidates(hr, cat, "minecraft:plains", 4).isEmpty(), "4 lits finis + 2 en route pour 4 habitants (objectif 6) : on attend la fin des travaux");
+		while (!inProgress.complete()) inProgress.advance();
+		var after = MayorPlanner.candidates(hr, cat, "minecraft:plains", 4);
+		check(!after.isEmpty() && after.get(0).plan().name.equals("puits"), "6 lits finis pour 4 habitants : le maire passe au puits (" + (after.isEmpty() ? "-" : after.get(0).plan().name) + ")");
+		check(MayorPlanner.candidates(hr, cat, "minecraft:plains", 10).get(0).plan().meta.category().equals("house"), "la population grandit : retour aux maisons");
+
+		// coffre de ville : un coffre + une émeraude, fabriqué au dépôt
+		Stock tc = new Stock();
+		tc.add("minecraft:oak_log", 2);
+		tc.add("minecraft:emerald", 1);
+		check(planner.plan(tc, "livingvillages:town_chest", 1).complete(), "coffre de ville : 2 bûches + 1 émeraude");
+		check(!planner.plan(new Stock(), "livingvillages:town_chest", 1).complete() && planner.plan(new Stock(), "livingvillages:town_chest", 1).missing().containsKey("minecraft:emerald"), "sans émeraude : manque une émeraude");
+
+		// colons : équipe et provisions
+		List<Role> crew = Settlement.crew();
+		check(crew.contains(Role.MAYOR) && crew.stream().filter(r -> r == Role.BUILDER).count() == 2 && crew.contains(Role.LUMBERJACK) && crew.contains(Role.MINER), "équipe de colons");
+		for (Theme th : Theme.values()) {
+			Stock ss = Settlement.starterStock(th);
+			check(ss.count("minecraft:" + th.wood + "_log") > 0 && ss.count("minecraft:emerald") == Settlement.TREASURY_EMERALDS, "provisions de colons : " + th);
+		}
+		Town col = new Town("col", "Colonie");
+		col.dense = true;
+		col.mayorId = "m";
+		col.members.put("m", Role.MAYOR);
+		for (int i = 0; i < crew.size(); i++) if (crew.get(i) != Role.MAYOR) col.members.put("c" + i, crew.get(i));
+		Settlement.starterStock(Theme.PLAINS).asMap().forEach(col.stockpile::add);
+		col.centerX = 0;
+		col.centerZ = 0;
+		BuilderLogic colLogic = new BuilderLogic(planner);
+		var mairie = MayorBrain.think(col, cat, new Fake((x, z) -> 70, (x, z) -> false), "minecraft:plains", 5);
+		check(mairie.isPresent() && mairie.get().site().plan.name.equals("mairie"), "colonie : la mairie d'abord");
+		check(mairie.isPresent() && buildAll(col, mairie.get().site(), colLogic, new Inventory()) > 0, "les colons construisent la mairie avec leurs provisions de départ");
+
+		// la ville espacée n'a jamais de mairie
+		List<String> o3 = new ArrayList<>();
+		growTown(cat, false, new Fake((x, z) -> 70, (x, z) -> false), "minecraft:plains", 8, o3);
+		check(!o3.contains("mairie"), "mode espacé : pas de bâtiment central : " + o3);
+	}
+
+	/** Phase E : récompenses de travail, recrutement automatique, villes de grande taille. */
+	static void phaseE(PlanCatalog cat, ConversionPlanner planner) {
+		// --- récompenses : fréquences, quantités, chance, métiers sans table
+		Random rng = new Random(7);
+		int n = 100000, coal = 0, emerald = 0, coalBoost = 0, coalLuck = 0;
+		for (int i = 0; i < n; i++) {
+			Map<String, Integer> r = WorkRewards.roll(Role.MINER, rng);
+			if (r.containsKey("minecraft:coal")) {
+				coal++;
+				check(r.get("minecraft:coal") >= 1 && r.get("minecraft:coal") <= 2, "1 à 2 charbons");
+			}
+			if (r.containsKey("minecraft:emerald")) emerald++;
+			if (WorkRewards.roll(Role.MINER, "minecraft:coal", 1.0, 3.0, rng).containsKey("minecraft:coal")) coalBoost++;
+			if (WorkRewards.roll(Role.MINER, null, 2.0, 1.0, rng).containsKey("minecraft:coal")) coalLuck++;
+		}
+		check(Math.abs(coal / (double) n - 0.12) < 0.01, "le mineur trouve du charbon environ 12 % du temps : " + coal / (double) n);
+		check(Math.abs(emerald / (double) n - 0.015) < 0.004, "et des émeraudes environ 1,5 % du temps : " + emerald / (double) n);
+		check(Math.abs(coalBoost / (double) n - 0.36) < 0.015, "fouille ciblée : chance triplée : " + coalBoost / (double) n);
+		check(Math.abs(coalLuck / (double) n - 0.24) < 0.015, "chance x2 : " + coalLuck / (double) n);
+		check(WorkRewards.roll(Role.BUILDER, new Random(1)).isEmpty() && WorkRewards.roll(Role.MAYOR, new Random(1)).isEmpty(), "pas de récompense pour constructeur et maire");
+		check(WorkRewards.canFind(Role.MINER, "minecraft:coal") && !WorkRewards.canFind(Role.LUMBERJACK, "minecraft:coal"), "qui peut trouver quoi");
+		check(Role.MINER.canProduce("minecraft:emerald") && Role.anyProduces("minecraft:emerald"), "le mineur peut prendre une commande d'émeraudes");
+		check(new Random(3).nextInt() == new Random(3).nextInt() && WorkRewards.roll(Role.FARMER, new Random(5)).equals(WorkRewards.roll(Role.FARMER, new Random(5))), "tirages reproductibles avec la même graine");
+
+		// --- monde rare : sans charbon ni émeraude dans le sol, tout de même des torches et des coffres de ville
+		BuilderLogic logic = new BuilderLogic(planner);
+		for (String name : new String[]{"petite_maison", "maison_moyenne", "entrepot", "mairie", "igloo"}) {
+			for (Theme th : new Theme[]{Theme.PLAINS, Theme.DESERT}) {
+				int iters = runPipeline(cat.get(name), th, logic, planner, true);
+				check(iters > 0, "monde rare : " + name + "/" + th + " se construit grâce aux récompenses de fouille (code " + iters + ")");
+			}
+		}
+
+		// --- recrutement automatique
+		check(Recruiter.targets(30).get(Role.BUILDER) == 4 && Recruiter.targets(30).get(Role.LUMBERJACK) == 3 && Recruiter.targets(8).get(Role.SHEPHERD) == 0, "effectifs visés");
+		Town rc = new Town("rc", "Rc");
+		rc.mayorId = "m";
+		rc.members.put("m", Role.MAYOR);
+		List<String> free = new ArrayList<>();
+		for (int i = 0; i < 40; i++) free.add(String.format("v%02d", i));
+		Map<String, Role> got = Recruiter.assign(rc, free, 41);
+		Map<Role, Integer> counts = new EnumMap<>(Role.class);
+		for (Role r : got.values()) counts.merge(r, 1, Integer::sum);
+		Map<Role, Integer> goal = Recruiter.targets(41);
+		for (Role r : goal.keySet()) check(counts.getOrDefault(r, 0) == goal.get(r), "recrutement : " + r + " = " + counts.getOrDefault(r, 0) + " / " + goal.get(r));
+		check(got.size() < free.size() && !got.containsValue(Role.MAYOR), "les autres restent des habitants ordinaires, jamais de second maire");
+		for (Map.Entry<String, Role> e : got.entrySet()) rc.members.put(e.getKey(), e.getValue());
+		check(Recruiter.assign(rc, free.stream().filter(x -> !got.containsKey(x)).toList(), 41).isEmpty(), "plus rien à recruter une fois les effectifs atteints");
+		rc.autoRecruit = true;
+		check(TownStore.read(TownStore.write(List.of(rc)), cat).get(0).autoRecruit, "recrutement automatique sauvegardé");
+
+		// --- une ville entière : 60 habitants, terrain plat, mode compact
+		Fake flat = new Fake((x, z) -> 70, (x, z) -> false);
+		long start = System.nanoTime();
+		List<String> order = new ArrayList<>();
+		Town city = growTown(cat, true, flat, "minecraft:plains", 60, order);
+		long ms = (System.nanoTime() - start) / 1_000_000;
+		int beds = 0;
+		for (BuildSite s : city.sites) if (s.plan.meta.category().equals("house")) beds += s.plan.meta.capacity();
+		System.out.println("  ville de 60 habitants : " + city.sites.size() + " bâtiments, étendue " + city.extent() + " blocs, " + beds + " lits, " + city.roads.size() + " cases de rue, calculée en " + ms + " ms");
+		check(city.sites.size() > 40 && beds >= 78, "grande ville : plus de 40 bâtiments et au moins 78 lits (" + city.sites.size() + " / " + beds + ")");
+		check(city.extent() >= DenseLayout.PITCH && city.extent() <= DenseLayout.MAX_RINGS * DenseLayout.PITCH + 7, "la ville s'étend au-delà de l'anneau central sans sortir du plan : étendue " + city.extent());
+		check(ms < 30000, "décisions de la grande ville en moins de 30 s : " + ms + " ms");
+		for (int i = 1; i < city.sites.size(); i++) {
+			check(SharedWalls.compatibleOverlap(city.sites.get(i), city.sites.subList(0, i)) >= 0, "grande ville : " + city.sites.get(i).plan.name + " compatible avec ses voisins");
+			int[] fr = city.sites.get(i).frontCell();
+			check(DenseLayout.isStreet(city, fr[0], fr[1]), "grande ville : la porte donne sur une rue");
+		}
+		check(city.sites.size() <= Town.MAX_SITES, "plafond de la ville respecté");
+
+		// --- une très grande ville : 250 habitants (le plafond de bâtiments s'applique)
+		long start2 = System.nanoTime();
+		Town metropolis = growTown(cat, true, flat, "minecraft:plains", 250, new ArrayList<>());
+		long ms2 = (System.nanoTime() - start2) / 1_000_000;
+		System.out.println("  ville de 250 habitants : " + metropolis.sites.size() + " bâtiments, étendue " + metropolis.extent() + " blocs, " + metropolis.roads.size() + " cases de rue, calculée en " + ms2 + " ms");
+		check(metropolis.sites.size() == Town.MAX_SITES, "très grande ville : le plafond de " + Town.MAX_SITES + " bâtiments est atteint (" + metropolis.sites.size() + ")");
+		check(ms2 < 120000, "calcul de la très grande ville en moins de 2 minutes : " + ms2 + " ms");
+		for (int i = 1; i < metropolis.sites.size(); i++) {
+			check(SharedWalls.compatibleOverlap(metropolis.sites.get(i), metropolis.sites.subList(0, i)) >= 0, "très grande ville : " + metropolis.sites.get(i).plan.name + " compatible avec ses voisins");
+		}
 	}
 
 	/** Faux terrain : une fonction de hauteur et une zone interdite (lac). */
@@ -226,7 +611,13 @@ public class CoreSelfTest {
 				while (!site.complete()) site.advance();
 				site.prepDone = true;
 			}
-			check(!order.isEmpty() && order.get(0).equals("puits"), biome + " : le premier bâtiment est le puits : " + order);
+			check(!order.isEmpty() && cat.get(order.get(0)).meta.category().equals("house") && order.contains("puits"),
+					biome + " : d'abord des maisons (lits posés), puits ensuite : " + order);
+			int firstNonHouse = 0;
+			while (firstNonHouse < order.size() && cat.get(order.get(firstNonHouse)).meta.category().equals("house")) firstNonHouse++;
+			int bedsBefore = 0;
+			for (int i = 0; i < firstNonHouse; i++) bedsBefore += cat.get(order.get(i)).meta.capacity();
+			check(bedsBefore >= (int) Math.ceil(MayorPlanner.BEDS_PER_VILLAGER * pop), biome + " : au moins 1,3 lit par habitant avant tout autre bâtiment (" + bedsBefore + ")");
 			int housing = 0, farming = 0, defense = 0;
 			Map<String, Integer> counts = new java.util.HashMap<>();
 			for (BuildSite s : t.sites) {
@@ -239,7 +630,7 @@ public class CoreSelfTest {
 					}
 				}
 			}
-			check(housing >= pop, biome + " : assez de lits (" + housing + "/" + pop + ") " + order);
+			check(housing >= (int) Math.ceil(1.3 * pop), biome + " : assez de lits (" + housing + "/" + pop + ") " + order);
 			check(farming >= pop, biome + " : assez de nourriture (" + farming + "/" + pop + ")");
 			check(defense >= pop, biome + " : assez de défense (" + defense + "/" + pop + ")");
 			for (var e : counts.entrySet()) check(e.getValue() <= cat.get(e.getKey()).meta.max(), biome + " : trop de " + e.getKey());
@@ -320,6 +711,15 @@ public class CoreSelfTest {
 		check(MayorBrain.think(q, cat, flat, "minecraft:plains", 6, true).isPresent(), "/lv decide : décision forcée même en mode manuel");
 		for (BuildSite s : q.sites) while (!s.complete()) s.advance();
 		check(MayorBrain.think(q, cat, flat, "minecraft:plains", 6).isEmpty(), "mode manuel : le maire ne décide pas");
+
+		// puits déjà présent dans le village : le maire n'en construit pas, et la ville se souvient de ce détail
+		Town pw = new Town("pw", "Pw");
+		pw.mayorId = "m";
+		pw.members.put("m", Role.MAYOR);
+		pw.externalWell = true;
+		var firstPw = MayorBrain.think(pw, cat, flat, "minecraft:plains", 6);
+		check(firstPw.isPresent() && !firstPw.get().site().plan.meta.category().equals("well"), "puits existant : pas de nouveau puits (" + (firstPw.isPresent() ? firstPw.get().site().plan.name : "-") + ")");
+		check(TownStore.read(TownStore.write(List.of(pw)), cat).get(0).externalWell, "puits existant sauvegardé");
 
 		// plafond de bâtiments
 		Town big = new Town("big", "Grande");
@@ -433,7 +833,7 @@ public class CoreSelfTest {
 			texts.add(Files.readString(plansDir.resolve(name.strip() + ".plan")));
 		}
 		PlanCatalog cat = PlanCatalog.fromTexts(texts);
-		check(cat.all().size() == 13, "13 plans attendus : " + cat.all().size());
+		check(cat.all().size() == 14, "14 plans attendus : " + cat.all().size());
 		BuildPlan pm = cat.get("petite_maison");
 		check(pm != null && pm.sizeX == 5 && pm.sizeZ == 5 && pm.sizeY == 5, "petite maison 5x5x5");
 		for (BuildPlan p : cat.all()) {
@@ -471,7 +871,7 @@ public class CoreSelfTest {
 		// besoins d'une petite maison (plaines) : objets attendus
 		Map<String, Integer> needs = pm.totalNeeds(Theme.PLAINS);
 		check(needs.getOrDefault("minecraft:oak_door", 0) == 1, "1 porte : " + needs);
-		check(needs.getOrDefault("minecraft:white_bed", 0) == 1, "1 lit : " + needs);
+		check(needs.getOrDefault("minecraft:white_bed", 0) == 2, "2 lits : " + needs);
 		check(needs.getOrDefault("minecraft:oak_slab", 0) == 25, "25 dalles : " + needs);
 		check(!needs.containsKey(null), "pas d'objet nul");
 
@@ -543,11 +943,12 @@ public class CoreSelfTest {
 				Town tv = new Town("sim", "Sim");
 				for (String w : RecipeBook.WOODS) tv.stockpile.add("minecraft:" + w + "_log", 200);
 				tv.stockpile.add("minecraft:cobblestone", 300);
-				tv.stockpile.add("minecraft:sand", 300);
+				tv.stockpile.add("minecraft:sand", 900);
 				tv.stockpile.add("minecraft:white_wool", 60);
 				tv.stockpile.add("minecraft:snowball", 600);
 				tv.stockpile.add("minecraft:coal", 30);
 				tv.stockpile.add("minecraft:dirt", 60);
+				tv.stockpile.add("minecraft:emerald", 20);
 				BuildSite bs = new BuildSite("sim-c1", p, th, 0, 0, 0, 0, 0);
 				Inventory bag = new Inventory();
 				check(buildAll(tv, bs, logic, bag) == bs.total(), "simulation " + p.name + "/" + th);
@@ -563,6 +964,8 @@ public class CoreSelfTest {
 
 		phaseB(cat, planner);
 		phaseC(cat, planner);
+		phaseD(cat, planner);
+		phaseE(cat, planner);
 
 
 

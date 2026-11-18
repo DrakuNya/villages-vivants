@@ -19,7 +19,7 @@ public final class BuildSite {
 	public final Theme theme;
 	public final int ox, oy, oz;
 	public final int rotation;
-	private final List<PlanBlock> blocks;
+	private List<PlanBlock> blocks;
 	private int cursor;
 	/** Plus petit = plus urgent. */
 	public int priority = 50;
@@ -38,6 +38,38 @@ public final class BuildSite {
 		this.rotation = ((rotation % 4) + 4) % 4;
 		this.blocks = plan.blocks(theme, this.rotation);
 		this.cursor = Math.max(0, Math.min(cursor, blocks.size()));
+	}
+
+	/** Clé unique d'un bloc du monde (x, y, z). */
+	public static long blockKey(int x, int y, int z) {
+		return ((long) (x + (1 << 21)) << 40) | ((long) (z + (1 << 21)) << 16) | ((y + 1024) & 0xFFFFL);
+	}
+
+	/** Les blocs de ce chantier (à construire ou déjà posés), par position absolue -> identifiant de bloc. */
+	public Map<Long, String> blockMap() {
+		Map<Long, String> m = new java.util.HashMap<>();
+		for (PlanBlock b : blocks) m.put(blockKey(ox + b.dx(), oy + b.dy(), oz + b.dz()), b.blockId());
+		return m;
+	}
+
+	/** Retire les blocs déjà fournis par un bâtiment voisin (mur partagé) ; renvoie le nombre de blocs retirés. */
+	public int dropBlocks(java.util.Set<Long> keys) {
+		List<PlanBlock> kept = new ArrayList<>();
+		int dropped = 0;
+		for (int i = 0; i < blocks.size(); i++) {
+			PlanBlock b = blocks.get(i);
+			if (keys.contains(blockKey(ox + b.dx(), oy + b.dy(), oz + b.dz()))) {
+				dropped++;
+				if (i < cursor) cursor--;
+			} else kept.add(b);
+		}
+		blocks = kept;
+		cursor = Math.min(cursor, blocks.size());
+		return dropped;
+	}
+
+	public void setCursor(int c) {
+		cursor = Math.max(0, Math.min(c, blocks.size()));
 	}
 
 	public int total() {

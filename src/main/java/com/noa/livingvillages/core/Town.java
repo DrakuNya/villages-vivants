@@ -18,13 +18,17 @@ public final class Town {
 	public final Market market = new Market();
 	/** Ce que porte chaque villageois (identifiant -> sac). */
 	public final Map<String, Inventory> inventories = new LinkedHashMap<>();
+	/** Ville compacte (quartiers serrés, murs partagés, rues étroites) au lieu de bâtiments espacés. */
+	public boolean dense;
+	/** Un puits existait déjà dans le village (détecté dans le monde) : le maire n'en construit pas. */
+	public boolean externalWell;
 	/** Le maire décide-t-il seul des constructions ? */
 	public boolean auto = true;
 	/** Chemins de terre de la ville (clé = coordonnées). */
 	public final Map<Long, RoadCell> roads = new LinkedHashMap<>();
 	public static final int MAX_QUEUED_SITES = 2;
 	/** Plafond de bâtiments par ville (évite une construction sans fin). */
-	public static final int MAX_SITES = 40;
+	public static final int MAX_SITES = 150;
 	public static final int MAX_BUILDERS_PER_SITE = 3;
 	private int nextSite = 1;
 
@@ -90,6 +94,19 @@ public final class Town {
 		return inventories.computeIfAbsent(memberId, k -> new Inventory());
 	}
 
+	/** Un habitant a disparu (mort, transformé) : son sac revient à l'entrepôt et ses commandes sont libérées. */
+	public boolean removeMember(String memberId) {
+		if (!members.containsKey(memberId)) return false;
+		Inventory inv = inventories.remove(memberId);
+		if (inv != null) {
+			for (Map.Entry<String, Integer> e : inv.drain().asMap().entrySet()) stockpile.add(e.getKey(), e.getValue());
+		}
+		board.release(memberId);
+		members.remove(memberId);
+		if (memberId.equals(mayorId)) mayorId = null; // la mairie est vacante : un nouveau ruban d'élu permet de la reprendre
+		return true;
+	}
+
 	/** Dépose tout le sac dans l'entrepôt et solde les commandes que cet ouvrier avait prises. */
 	public Stock deposit(String workerId) {
 		Inventory inv = inventoryOf(workerId);
@@ -106,11 +123,35 @@ public final class Town {
 		for (BuildSite s : sites) {
 			if (!s.complete() || !s.plan.meta.category().equals("storage")) continue;
 			for (PlanBlock b : s.plan.blocks(s.theme, s.rotation)) {
-				if (b.blockId().endsWith(":chest")) return s.worldPos(b);
+				if (b.blockId().endsWith("chest")) return s.worldPos(b);
 			}
 		}
 		return null;
 	}
+
+	/** Cases occupées par les autres bâtiments que 's' (clés RoadCell.key). */
+	public java.util.Set<Long> footprintCellsExcept(BuildSite s) {
+		java.util.Set<Long> out = new java.util.HashSet<>();
+		for (BuildSite o : sites) {
+			if (o == s) continue;
+			int[] f = o.footprint();
+			for (int x = f[0]; x <= f[2]; x++) for (int z = f[1]; z <= f[3]; z++) out.add(RoadCell.key(x, z));
+		}
+		return out;
+	}
+
+	/** Distance maximale (en cases, norme du max) entre le centre et un bâtiment : la taille de la ville. */
+	public int extent() {
+		int e = 0;
+		for (BuildSite s : sites) {
+			int[] f = s.footprint();
+			e = Math.max(e, Math.max(Math.max(Math.abs(f[0] - centerX), Math.abs(f[2] - centerX)), Math.max(Math.abs(f[1] - centerZ), Math.abs(f[3] - centerZ))));
+		}
+		return e;
+	}
+
+	/** Recrutement automatique : les villageois sans métier près de la ville reçoivent un métier selon les besoins. */
+	public boolean autoRecruit;
 
 	public int pendingRoadCells() {
 		int n = 0;

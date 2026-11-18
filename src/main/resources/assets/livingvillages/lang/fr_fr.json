@@ -1,4 +1,7 @@
 {
   "item.livingvillages.mallet": "Maillet",
-  "item.livingvillages.mayor_sash": "Ruban d'élu"
+  "item.livingvillages.mayor_sash": "Ruban d'élu",
+  "item.livingvillages.founders_charter": "Charte des colons",
+  "block.livingvillages.town_chest": "Coffre de ville",
+  "itemGroup.livingvillages.main": "Villages Vivants"
 }

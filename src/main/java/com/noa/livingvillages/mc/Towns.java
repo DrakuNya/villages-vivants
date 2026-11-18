@@ -47,11 +47,12 @@ public final class Towns {
 
 	public static Town nearest(int x, int z, int maxDistance) {
 		Town best = null;
-		long bestD = (long) maxDistance * maxDistance;
+		long bestD = Long.MAX_VALUE;
 		for (Town t : TOWNS) {
 			long dx = t.centerX - x, dz = t.centerZ - z;
 			long d = dx * dx + dz * dz;
-			if (d <= bestD) {
+			long limit = Math.max((long) maxDistance, t.extent() + 48L); // une grande ville a un grand rayon
+			if (d <= limit * limit && d < bestD) {
 				bestD = d;
 				best = t;
 			}

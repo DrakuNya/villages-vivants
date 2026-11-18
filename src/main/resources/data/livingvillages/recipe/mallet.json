@@ -3,11 +3,12 @@
   "category": "equipment",
   "key": {
     "P": "#minecraft:planks",
+    "E": "minecraft:emerald",
     "S": "minecraft:stick"
   },
   "pattern": [
     "PPP",
-    "PPP",
+    "PEP",
     " S "
   ],
   "result": {

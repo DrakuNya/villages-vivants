@@ -8,6 +8,40 @@ Mod Fabric pour Minecraft **26.3** (Java 25). Les villageois élisent un **maire
 
 ---
 
+## Historique des versions
+- **Phase A** : objets (maillet, ruban d'élu), élection du maire et des métiers, plans, constructeur
+- **Phases B + C** (mise à jour déjà envoyée sur GitHub) : maire autonome, urbanisme, terrassement, chemins, 13 plans ; sacs des villageois, dépôt, fabrication au dépôt
+- **Récompenses de travail, recrutement automatique, grandes villes** (la plus récente) : voir « Récompenses de travail et grandes villes » ci-dessous
+- **Colons, lits posés, coffre de ville, onglet créatif** : voir « Colons et objets du mod » ci-dessous
+- **Ville compacte** : style romain/médiéval, voir « Ville compacte » ci-dessous
+- **Mise à jour complète précédente** (tout depuis B + C) : le maire tient compte des bâtiments existants (cloche, puits), `/lv center`, dons en accroupi, **écrans d'inventaire** (sac d'un villageois, entrepôt de la ville), **ramassage des objets jetés par terre**, sacs de 9 cases
+
+## Récompenses de travail et grandes villes
+- **Récompenses de travail aléatoires** : chaque action de travail peut rapporter un bonus selon le métier, qui va dans le sac (ou à l'entrepôt s'il est plein). Mineur : charbon 12 % (1-2), argile 5 %, fer 4 %, **émeraude 1,5 %**. Bûcheron : bâtons 25 %, pommes 7 %, pousses de chêne 10 %. Berger : ficelle 12 %, mouton 8 %. Prévus pour les métiers à venir : fermier (graines, légumes), éleveur (cuir, œufs, plumes), cuisinier (pain), pêcheur (poisson), marchand (**émeraudes 10 %**), garde (flèches). Constructeur et maire : rien. Les tables sont dans `core/WorkRewards.java`, faciles à ajuster.
+- **Fouille ciblée** : si la ville réclame du **charbon** ou des **émeraudes** et qu'il n'y en a pas dans le sol des environs, le mineur casse de la pierre, de la terre ou du sable au hasard (il en garde le butin) et la chance de trouver l'objet demandé est **triplée**. Les torches et les coffres de ville ne dépendent donc plus des filons. Test : sans aucun charbon ni émeraude dans le monde, chaque maison, l'entrepôt et la mairie se construisent quand même.
+- **Recrutement automatique** (`/lv recruit on|off`, activé pour les colonies) : toutes les 30 secondes, les habitants adultes sans métier reçoivent un métier selon la taille de la ville (par exemple pour 30 habitants : 4 constructeurs, 3 bûcherons, 3 mineurs ; bergers à partir de 12). Les autres restent des habitants ordinaires.
+- **Villes de grande taille** : jusqu'à **150 bâtiments** par ville, 6 cercles d'îlots, rayon des rues et de comptage de la population qui grandit avec la ville ; une grande ville est reconnue de plus loin (`/lv ...` et clics). Simulation : 60 habitants → 61 bâtiments dans un rayon de 28 blocs ; 250 habitants → le plafond de 150 bâtiments (rayon 45 blocs, environ 100 ms de calcul par décision, hors scan du terrain par Minecraft).
+- **Ce qui manque encore pour de vraies villes** : des immeubles à plusieurs étages (pour loger beaucoup de monde avec peu de bâtiments), des quartiers et des remparts, d'autres métiers actifs (fermier, éleveur, cuisinier, garde), un meilleur moteur de scan du terrain (en tâche de fond, par morceaux), plusieurs mairies / quartiers, une vraie monnaie entre villes.
+
+## Colons et objets du mod
+- **Charte des colons** : clic droit sur le sol avec la charte (ou `/lv settle`) fonde une **colonie** : 1 maire, 2 constructeurs, 1 bûcheron, 1 mineur apparaissent, avec leurs provisions (bois du style de la région, 160 pierres, sable, laine, charbon, terre, **10 émeraudes**). La colonie est compacte. Impossible si une ville existe déjà à moins de 96 blocs. Recette : 4 émeraudes + 1 papier (en croix).
+- **Règle des lits** : le maire ne construit **que des maisons** tant que le nombre de lits **posés** (maisons *terminées*) est inférieur à **1,3 × le nombre d'habitants** ; s'il a déjà prévu assez de maisons, il attend qu'elles soient finies. Passé ce seuil, il reprend les autres bâtiments (puits, fermes, ateliers...), et revient aux maisons dès que la population grandit. (La capacité d'une maison = son nombre de lits : petite maison 2, maison moyenne 4, igloo 2.)
+- **Coffre de ville** (nouveau bloc, logo émeraude) : clic droit = ouvre l'**entrepôt de la ville la plus proche**. Recette : un coffre + une émeraude au centre (8 planches + 1 émeraude). **L'entrepôt en construit trois** : les villageois les fabriquent au dépôt avec des émeraudes de la ville. Accroupi : on pose un bloc comme d'habitude.
+- **Émeraudes** : chaque nouvelle ville (maire élu ou colons) démarre avec un **trésor de 10 émeraudes** dans son entrepôt. Pour une ville déjà créée : `/lv stock emerald 10` ou donner des émeraudes (accroupi + clic droit sur un habitant). Sans émeraude, l'entrepôt ne peut pas être fini.
+- **Objets du mod à base d'émeraudes** : maillet (5 planches + 1 émeraude + 1 bâton), ruban d'élu (3 laines rouges + 2 lingots d'or + 1 émeraude), coffre de ville, charte des colons.
+- **Onglet créatif « Villages Vivants »** : maillet, ruban d'élu, charte des colons, coffre de ville.
+- Correction : les lits des petites maisons et de l'igloo étaient mal formés (la tête et le pied n'étaient pas côte à côte) ; un test vérifie maintenant que chaque lit de chaque plan, dans toutes les rotations, a sa tête à côté de son pied.
+- À faire : colons qui apparaissent naturellement (caravanes, camps) ; plus de métiers de départ ; les objets du mod comme monnaie d'échange entre villes.
+
+## Ville compacte (style romain / médiéval)
+- **Par défaut pour les nouvelles villes** (les villes déjà créées restent espacées) ; `/lv layout dense` ou `/lv layout spaced` change le style des **prochaines** constructions de la ville la plus proche.
+- **Une mairie au centre** (plan `mairie`, 9×9, pierre, bois et verre) est toujours le premier bâtiment ; un **anneau de rues** l'entoure.
+- Puis un **quadrillage de rues d'une case de large**, tous les 14 blocs, qui délimite des **îlots de 13×13** (3 cercles d'îlots autour du centre). Les bâtiments s'alignent le long des rues, **porte côté rue**, et se serrent : **murs mitoyens** (un mur commun, les blocs déjà posés par le voisin ne sont pas reconstruits) et dos à dos.
+- Règles : seul un mur d'une case d'épaisseur peut être partagé, avec des blocs de mur compatibles (jamais une porte, un lit, un coffre...) ; la porte de chaque bâtiment donne sur une rue reliée au réseau ; une porte n'est jamais bouchée par un voisin ; mêmes niveaux de sol entre voisins.
+- Pas de panneau en ville compacte (il gênerait les rues étroites) : **clic droit sur un bâtiment pas encore terminé** affiche son état (ressources vertes / grises).
+- Dans la simulation de test (12 habitants) : 19 bâtiments sur environ 1 090 cases au lieu de 2 810 en mode espacé, avec 11 murs mitoyens ; toutes les portes sont reliées aux rues.
+- Limites : rues en quadrillage régulier (pas de ruelles tortueuses), pas encore de remparts ni de places, pas de maisons à étages. Si le centre est déjà occupé (cloche, puits ou maisons d'un village existant, eau, pente), la ville se décale de quelques blocs jusqu'à trouver de la place ; s'il n'y a nulle part de place (jusqu'à 36 blocs), le maire ne construit rien.
+
 ## 1. Comment tester
 
 1. Pousse le projet sur GitHub (dossier `.github` compris). L'onglet **Actions** lance :
@@ -31,9 +65,10 @@ Mod Fabric pour Minecraft **26.3** (Java 25). Les villageois élisent un **maire
 3. Le mode automatique est **actif par défaut**. Toutes les ~10 secondes le maire décide d'un bâtiment (message bleu dans le chat). Pour le déclencher tout de suite : `/lv decide`. Pour reprendre la main : `/lv auto off` (et `/lv auto on` pour le rendre autonome).
 4. Séquence attendue : **puits** au centre → **maisons** (jusqu'à avoir autant de lits que d'habitants) → **fermes** → **lieux de travail** des métiers présents → **tour de garde** → entrepôt, marché, forge…
 5. Pour chaque bâtiment : **terrassement** (le terrain est aplani et dégagé, message « Terrain prêt »), puis panneau, puis construction étage par étage par les constructeurs (jusqu'à 3 par chantier). Quand il n'y a plus de chantier, les constructeurs **posent les chemins** reliant chaque porte à la place centrale, puis les **lampadaires** (torches, une toutes les 6 cases).
-6. **Inventaires (phase C)** : chaque habitant porte un sac de 8 emplacements (piles de 64, lits seuls, boules de neige par 16...). Les bûcherons, mineurs et bergers **récoltent dans leur sac**, puis **marchent jusqu'au dépôt** (la place centrale, puis un coffre de l'entrepôt une fois celui-ci construit) pour y déposer. Les constructeurs, quand il leur manque l'objet du prochain bloc, **vont au dépôt, y fabriquent** (2 bûches → planches → portes...) **et repartent avec le sac chargé**. Les lampadaires prennent leur torche dans le sac du cantonnier. Pour voir un sac : **accroupi + clic droit à main vide** sur un habitant, ou `/lv inv` (tous les sacs et le dépôt).
-7. Donne-leur des matériaux de départ pour accélérer : `/lv stock oak_log 200`, `/lv stock cobblestone 200`, `/lv stock sand 40`, `/lv stock white_wool 20`, `/lv stock coal 10`, `/lv stock wheat 40`.
-8. `/lv town` montre la file de chantiers (avancement, priorité), les chemins restants, l'entrepôt et le tableau des besoins.
+6. **Inventaires (phase C)** : chaque habitant porte un sac de 9 emplacements (piles de 64, lits seuls, boules de neige par 16...). Les bûcherons, mineurs et bergers **récoltent dans leur sac**, puis **marchent jusqu'au dépôt** (la place centrale, puis un coffre de l'entrepôt une fois celui-ci construit) pour y déposer. Les constructeurs, quand il leur manque l'objet du prochain bloc, **vont au dépôt, y fabriquent** (2 bûches → planches → portes...) **et repartent avec le sac chargé**. Les lampadaires prennent leur torche dans le sac du cantonnier. **Écrans d'inventaire ouvrables** : **accroupi + clic droit à main vide** sur un habitant ouvre son sac (écran de distributeur, 9 cases) : tu peux y prendre ou y mettre des objets. **Clic droit sur le coffre de l'entrepôt** (une fois construit) ou `/lv depot` ouvre l'entrepôt de la ville (grand coffre de 54 cases). Les changements sont recopiés aussitôt ; les villageois concernés font une pause d'une dizaine de secondes après chaque changement. `/lv inv` résume tous les sacs dans le chat.
+7. **Donner des objets** : **jette-les** à moins de 2,5 blocs d'un habitant d'une ville (ou accroupi + clic droit avec l'objet en main) : s'ils sont utiles à la ville (bois, pierre, sable, laine, charbon, portes...), le villageois les ramasse après 2 secondes. Les constructeurs les gardent dans leur sac, les autres les déposent à l'entrepôt. Les objets sans usage pour la ville (nourriture, butin...) sont ignorés. Les constructeurs puisent ensuite au dépôt.
+8. Donne-leur des matériaux de départ pour accélérer : `/lv stock oak_log 200`, `/lv stock cobblestone 200`, `/lv stock sand 40`, `/lv stock white_wool 20`, `/lv stock coal 10`, `/lv stock wheat 40`.
+9. `/lv town` montre la file de chantiers (avancement, priorité), les chemins restants, l'entrepôt et le tableau des besoins.
 
 Ce que fait chaque métier **pour l'instant** : constructeur (bâtit, aplanit, trace les chemins), bûcheron (bûches), mineur (pierre, sable, terre, charbon, neige), berger (laine des moutons proches, 1 à 3 par tonte). Les autres métiers déclenchent leurs bâtiments mais n'ont pas encore de tâche (phase D).
 
@@ -56,6 +91,7 @@ core/   (aucune dépendance à Minecraft — testé)
   SitePlacer, TerrainView        où construire : lots autour de la place, sans chevauchement, évite l'eau et les pentes
   SitePrep                       terrassement : remblais, déblais, herbe
   RoadPlanner, RoadCell, RoadLogic  chemins vers la place + lampadaires (torches fabriquées au besoin)
+  DenseLayout, SharedWalls       ville compacte : îlots, rues étroites, murs mitoyens
   MayorBrain                     le maire autonome : décide, place, trace le chemin, crée le chantier
 mc/     (glue Minecraft — non testé)
   ModItems                       maillet, ruban d'élu
@@ -72,7 +108,7 @@ Principe : **le cerveau (core) décide, Minecraft (mc) exécute.** Tout ce qui e
 ## 3. Ce qui existe déjà
 
 - [x] Maillet + ruban d'élu (objets, textures, recettes, traductions fr/en)
-- [x] Donner un objet à un villageois → métier (hache/pioche/houe/cisailles/épée/laisse/bol/canne/émeraude pour les autres métiers, en s'accroupissant)
+- [x] Donner un objet à un villageois → métier (hache/pioche/houe/cisailles/épée/laisse/bol/canne/lingot d'or pour les autres métiers, en s'accroupissant)
 - [x] Maire + ville, une seule par zone (96 blocs), sauvegarde dans le monde
 - [x] 6 plans : petite maison, maison moyenne, puits, ferme, tour de garde, igloo (**seulement en biome enneigé**)
 - [x] Styles par biome (chêne/pierre, grès + acacia, épicéa…), rotation selon la direction du joueur
@@ -91,6 +127,22 @@ Principe : **le cerveau (core) décide, Minecraft (mc) exécute.** Tout ce qui e
 - [ ] Les commandes `/lv` n'ont **pas de restriction de permission** (tout joueur peut les utiliser)
 - [ ] Un seul monde géré : le Overworld
 - [ ] Les villageois non chargés (loin du joueur) ne travaillent pas
+
+### Notes sur la « fabrication »
+Les villageois ne fabriquent pas pour de vrai : au dépôt, la logique de la ville transforme les objets avec **sa propre table de recettes** (118 recettes dans `RecipeBook`, pas les recettes de Minecraft), sans table de craft ni animation. Pistes : exiger une table de craft / un établi à côté du dépôt, ou lire les vraies recettes du jeu.
+
+### Nouveaux points à vérifier (colons, bloc, onglet)
+- [ ] `new Villager(EntityTypes.VILLAGER, level)` + `addFreshEntity` (repris d'un test de Fabric API) ; le nom `EntityTypes`
+- [ ] `FabricCreativeModeTab.builder()`, `CreativeModeTabEvents.modifyOutputEvent`, `BlockBehaviour.Properties.of().strength(..).setId(..)`, `BlockItem` (repris de tests de Fabric API)
+- [ ] Textures (coffre de ville, charte) à juger à l'œil ; le coffre de ville est un cube simple, pas un vrai coffre animé
+- [ ] La charte se consomme au clic droit sur un bloc (pas dans le vide)
+
+### Nouveaux points à vérifier (écrans d'inventaire)
+- [ ] `DispenserMenu`, `ChestMenu.sixRows`, `SimpleContainer.setChanged()` et `Player.openMenu` (noms de la 26.3) : repris du code de Fabric API, mais `ChestMenu` n'y figure pas
+- [ ] Le sac se met bien à jour quand le joueur déplace des objets (et le villageois reprend le travail après la pause)
+- [ ] Les objets avec données (enchantements, noms) perdent leurs données en passant par l'entrepôt
+- [ ] Ramassage : `ItemEntity` (`getItem`, `discard`, `tickCount`) ; les habitants ne marchent pas vers les objets, ils ramassent seulement ce qui tombe près d'eux
+- [ ] Un sac ouvert pendant que le villageois travaille : la pause est une approximation (le jeu ne dit pas quand l'écran se ferme)
 
 ### Nouveaux points à vérifier (phase C)
 - [ ] Les villageois vont-ils bien au dépôt et en reviennent-ils ? (même fragilité de déplacement)
@@ -124,16 +176,17 @@ Principe : **le cerveau (core) décide, Minecraft (mc) exécute.** Tout ce qui e
 - [x] Berger : « tond » les moutons proches (laine) ; mineur : terre, neige, pierre ; la laine est une matière première (plus de ficelle)
 - [ ] Plusieurs variantes de maisons par biome (aujourd'hui : 2 maisons + igloo en terrain enneigé), grande ferme, église, bibliothèque, boucherie, écurie, grenier, mur d'enceinte, pont
 - [ ] Plans lisibles hors du jeu (éditeur/outil pour dessiner un plan, ou import depuis un fichier de structure `.nbt`)
-- [ ] Le maire choisit l'emplacement en tenant compte des **bâtiments déjà existants du village** (aujourd'hui il ne voit que les siens)
+- [x] Le maire tient compte des **bâtiments déjà existants** : il ne construit pas sur un sol « non naturel » (pierre taillée, planches, verre, champs...), centre la ville sur la **cloche** d'un village existant, et ne construit pas de puits s'il en détecte déjà un (`/lv center` pour recentrer une ville existante, à faire debout sur la cloche). Heuristique à améliorer (les maisons du village ne sont pas des « plans » connus du maire)
 - [ ] Voies principales (grille) et places, au lieu de chemins qui s'accrochent à l'existant
 
 ### Phase C — inventaires et stocks — **inventaires écrits, coffres réels à faire**
-- [x] **Inventaire pour chaque villageois** : 8 emplacements, limites de pile, sauvegardés dans la ville (ce sac est virtuel : il n'utilise pas l'inventaire interne des villageois de Minecraft)
+- [x] **Inventaire pour chaque villageois** : 9 emplacements, limites de pile, sauvegardés dans la ville (ce sac est virtuel : il n'utilise pas l'inventaire interne des villageois de Minecraft)
+- [x] **Écrans ouvrables** : sac d'un villageois (accroupi + main vide) et entrepôt de la ville (coffre du dépôt ou `/lv depot`), en menus vanilla côté serveur (aucun mod à installer côté client)
 - [x] Les récolteurs travaillent avec leur sac et **déposent au dépôt** ; les commandes du tableau ne sont soldées qu'au dépôt
 - [x] Les constructeurs construisent **depuis leur sac** et font des **tours au dépôt** pour se recharger ; la fabrication (planches, portes...) se fait au dépôt
 - [x] Le dépôt est un lieu réel : la place centrale, puis un **coffre de l'entrepôt** construit ; les villageois marchent jusqu'à lui
 - [x] Voir le sac d'un villageois (accroupi + main vide), `/lv inv`
-- [ ] **Coffres réels** : le contenu de l'entrepôt est encore un registre virtuel ; faire correspondre les coffres du monde (et accepter que le joueur y prenne ou y dépose des objets)
+- [ ] **Coffres réels** : l'entrepôt est un registre virtuel ; le coffre du dépôt ouvre cet entrepôt (pas le contenu du vrai coffre). À faire : faire correspondre les coffres du monde, et gérer les ajouts de objets par des entonnoirs
 - [ ] Utiliser le **vrai inventaire** des villageois de Minecraft (8 emplacements) au lieu du sac virtuel
 - [ ] **Porteur/messager** : déplace les ressources entre plusieurs dépôts et les chantiers
 - [ ] Plusieurs ouvriers sur la même commande (aujourd'hui une commande = un ouvrier à la fois)

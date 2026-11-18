@@ -10,6 +10,9 @@ import java.util.Set;
 
 /** La « tête » du maire : regarde l'état de la ville et dresse la liste de ce qu'il faudrait construire, dans l'ordre. */
 public final class MayorPlanner {
+	/** Objectif de lits posés par habitant : le village doit toujours avoir de la marge pour accueillir du monde. */
+	public static final double BEDS_PER_VILLAGER = 1.3;
+
 	private MayorPlanner() {
 	}
 
@@ -44,14 +47,36 @@ public final class MayorPlanner {
 			if (p.meta.minPopulation() <= pop && count.getOrDefault(p.name, 0) < p.meta.max()) eligible.add(p);
 		}
 		eligible.sort(Comparator.<BuildPlan>comparingInt(p -> p.meta.priority()).thenComparing(p -> p.name));
-
-		// 1) un puits au centre
-		for (BuildPlan p : eligible) if (p.meta.category().equals("well") && !hasCategory(town, "well")) out.add(new Decision(p, "le village n'a pas de puits"));
-		// 2) des logements
-		if (housing < pop) {
-			BuildPlan h = leastUsed(eligible, "house", count);
-			if (h != null) out.add(new Decision(h, "pas assez de lits (" + housing + " pour " + pop + " villageois)"));
+		// le bâtiment central n'existe qu'en ville compacte, et il passe avant tout le reste
+		if (!town.dense) eligible.removeIf(p -> p.meta.category().equals("center"));
+		else if (!hasCategory(town, "center")) {
+			for (BuildPlan p : eligible) {
+				if (p.meta.category().equals("center")) {
+					out.add(new Decision(p, "la ville a besoin d'un bâtiment central"));
+					return out;
+				}
+			}
 		}
+
+		// 0) des lits POSÉS (maisons terminées) en nombre suffisant : tant qu'il y en a moins de 1,3 par habitant,
+		//    le maire ne construit que des maisons (et attend que celles en cours soient finies s'il en a déjà prévu assez)
+		int builtBeds = 0, plannedBeds = 0;
+		for (BuildSite s : town.sites) {
+			if (!s.plan.meta.category().equals("house")) continue;
+			plannedBeds += s.plan.meta.capacity();
+			if (s.complete()) builtBeds += s.plan.meta.capacity();
+		}
+		int bedsNeeded = (int) Math.ceil(BEDS_PER_VILLAGER * pop);
+		if (builtBeds < bedsNeeded) {
+			BuildPlan h = plannedBeds < bedsNeeded ? leastUsed(eligible, "house", count) : null;
+			if (h != null) {
+				out.add(new Decision(h, "pas assez de lits posés (" + builtBeds + " pour " + pop + " villageois, objectif " + bedsNeeded + ")"));
+				return out;
+			}
+			if (plannedBeds >= bedsNeeded && leastUsed(eligible, "house", count) != null) return out; // assez de maisons en route : on attend
+		}
+		// 1) un puits au centre
+		for (BuildPlan p : eligible) if (p.meta.category().equals("well") && !hasCategory(town, "well") && !town.externalWell) out.add(new Decision(p, "le village n'a pas de puits"));
 		// 3) de la nourriture
 		if (farming < pop) {
 			BuildPlan f = leastUsed(eligible, "farm", count);

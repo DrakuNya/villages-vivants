@@ -18,6 +18,12 @@ public final class RoadPlanner {
 
 	/** Plus court chemin de (sx,sz) vers la route existante ou la place centrale la plus proche. Renvoie seulement les cases nouvelles. */
 	public static List<int[]> route(Town town, TerrainView terrain, int sx, int sz, int radius) {
+		return route(town, terrain, sx, sz, radius, null);
+	}
+
+	/** 'allowed' (facultatif) restreint le chemin à certaines cases (les rues de la ville compacte). */
+	public static List<int[]> route(Town town, TerrainView terrain, int sx, int sz, int radius,
+			java.util.function.BiPredicate<Integer, Integer> allowed) {
 		long startKey = RoadCell.key(sx, sz);
 		Set<Long> footprints = footprintCells(town);
 		if (footprints.contains(startKey) || terrain.blocked(sx, sz)) return List.of();
@@ -31,7 +37,7 @@ public final class RoadPlanner {
 		while (!queue.isEmpty()) {
 			int[] c = queue.poll();
 			long k = RoadCell.key(c[0], c[1]);
-			boolean atCenter = Math.abs(c[0] - town.centerX) <= PLAZA && Math.abs(c[1] - town.centerZ) <= PLAZA;
+			boolean atCenter = !town.dense && Math.abs(c[0] - town.centerX) <= PLAZA && Math.abs(c[1] - town.centerZ) <= PLAZA;
 			if (atCenter || (town.roads.containsKey(k) && k != startKey)) {
 				goal = k;
 				break;
@@ -42,6 +48,7 @@ public final class RoadPlanner {
 				long nk = RoadCell.key(nx, nz);
 				if (from.containsKey(nk) || footprints.contains(nk)) continue;
 				if (terrain.blocked(nx, nz)) continue;
+				if (allowed != null && !allowed.test(nx, nz)) continue;
 				from.put(nk, k);
 				queue.add(new int[]{nx, nz});
 			}
@@ -58,6 +65,22 @@ public final class RoadPlanner {
 		}
 		Collections.reverse(path); // du bâtiment vers le centre
 		return path;
+	}
+
+	/** Anneau de rues autour du bâtiment central (à 7 cases du centre) : le point de départ du réseau de la ville compacte. */
+	public static int addRing(Town town, TerrainView terrain) {
+		List<int[]> cells = new ArrayList<>();
+		int r = DenseLayout.STREET;
+		for (int x = town.centerX - r; x <= town.centerX + r; x++) {
+			cells.add(new int[]{x, town.centerZ - r});
+			cells.add(new int[]{x, town.centerZ + r});
+		}
+		for (int z = town.centerZ - r + 1; z <= town.centerZ + r - 1; z++) {
+			cells.add(new int[]{town.centerX - r, z});
+			cells.add(new int[]{town.centerX + r, z});
+		}
+		cells.removeIf(c -> terrain.blocked(c[0], c[1]));
+		return addRoad(town, cells);
 	}
 
 	/** Ajoute le chemin à la ville ; un lampadaire toutes les 6 cases. */

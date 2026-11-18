@@ -3,6 +3,7 @@ package com.noa.livingvillages.mc;
 import com.noa.livingvillages.core.BuildSite;
 import com.noa.livingvillages.core.ConversionPlanner;
 import com.noa.livingvillages.core.Role;
+import com.noa.livingvillages.core.Settlement;
 import com.noa.livingvillages.core.Stock;
 import com.noa.livingvillages.core.Town;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
@@ -29,15 +30,25 @@ public final class Interactions {
 			if (!(entity instanceof Villager villager) || villager.isBaby()) return InteractionResult.PASS;
 			ItemStack stack = player.getItemInHand(hand);
 			if (stack.isEmpty()) {
-				// main vide + accroupi sur un habitant : on regarde son sac
+				// main vide + accroupi sur un habitant : on ouvre son sac
 				Town t = Towns.ofMember(villager.getUUID().toString());
 				if (t == null || !player.isShiftKeyDown()) return InteractionResult.PASS;
-				showMember(player, t, villager.getUUID().toString());
+				BagMenu.open(player, t, villager.getUUID().toString());
 				return InteractionResult.SUCCESS;
 			}
 			String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
 			Role role = Role.byItem(itemId);
-			if (role == null) return InteractionResult.PASS;
+			if (role == null) {
+				// accroupi + objet en main sur un habitant : don à la ville (va dans l'entrepôt)
+				Town t = Towns.ofMember(villager.getUUID().toString());
+				if (t == null || !player.isShiftKeyDown()) return InteractionResult.PASS;
+				int n = stack.getCount();
+				t.stockpile.add(itemId, n);
+				if (!player.getAbilities().instabuild) stack.shrink(n);
+				Towns.markDirty();
+				player.sendSystemMessage(Component.literal("Don à " + t.name + " : " + itemId.replace("minecraft:", "") + " ×" + n + " (entrepôt).").withStyle(ChatFormatting.GREEN));
+				return InteractionResult.SUCCESS;
+			}
 			// Pour les outils « normaux » (hache, pioche...), il faut s'accroupir : sinon on ouvre le commerce comme d'habitude.
 			boolean ownItem = role == Role.MAYOR || role == Role.BUILDER;
 			if (!ownItem && !player.isShiftKeyDown()) return InteractionResult.PASS;
@@ -48,10 +59,36 @@ public final class Interactions {
 		UseBlockCallback.EVENT.register((player, level, hand, hitResult) -> {
 			if (!(level instanceof ServerLevel) || hand != InteractionHand.MAIN_HAND) return InteractionResult.PASS;
 			BlockPos clicked = hitResult.getBlockPos();
+			ItemStack held = player.getItemInHand(hand);
+			// charte des colons : fonde une colonie à l'endroit visé
+			if (!held.isEmpty() && ItemUtil.idOf(held).equals("livingvillages:founders_charter") && level instanceof ServerLevel sl) {
+				String err = Settlers.found(sl, clicked.above());
+				if (err != null) player.sendSystemMessage(Component.literal(err).withStyle(ChatFormatting.YELLOW));
+				else if (!player.getAbilities().instabuild) held.shrink(1);
+				return InteractionResult.SUCCESS;
+			}
+			// coffre de ville : ouvre l'entrepôt de la ville la plus proche (accroupi : on pose un bloc comme d'habitude)
+			if (level.getBlockState(clicked).getBlock() == ModBlocks.TOWN_CHEST && !player.isShiftKeyDown()) {
+				Town near = Towns.nearest(clicked.getX(), clicked.getZ(), 96);
+				if (near == null) player.sendSystemMessage(Component.literal("Ce coffre de ville n'est relié à aucune ville.").withStyle(ChatFormatting.YELLOW));
+				else DepotMenu.open(player, near);
+				return InteractionResult.SUCCESS;
+			}
 			for (Town t : Towns.all()) {
+				// le coffre du dépôt s'ouvre sur l'entrepôt de la ville
+				int[] chest = t.depotChest();
+				if (chest != null && clicked.equals(new BlockPos(chest[0], chest[1], chest[2]))) {
+					DepotMenu.open(player, t);
+					return InteractionResult.SUCCESS;
+				}
 				for (BuildSite s : t.sites) {
 					BlockPos sign = Director.signPos(s);
-					if (sign.equals(clicked)) {
+					boolean onSign = !t.dense && sign.equals(clicked);
+					// en ville compacte : un clic sur un bâtiment pas encore terminé affiche son état
+					int[] f = s.footprint();
+					boolean onBuilding = t.dense && !s.complete() && s.prepDone && clicked.getX() >= f[0] && clicked.getX() <= f[2]
+							&& clicked.getZ() >= f[1] && clicked.getZ() <= f[3] && clicked.getY() >= s.oy - 1 && clicked.getY() <= s.oy + s.plan.sizeY + 1;
+					if (onSign || onBuilding) {
 						showSite(player, t, s);
 						return InteractionResult.SUCCESS;
 					}
@@ -76,11 +113,18 @@ public final class Interactions {
 				player.sendSystemMessage(Component.literal("Il y a déjà un maire dans les environs (" + near.name + ").").withStyle(ChatFormatting.YELLOW));
 				return;
 			}
+			if (town == null && near != null) town = near; // mairie vacante : on la reprend
 			if (town == null) {
 				town = new Town(Towns.newTownId(), "Village " + (Towns.all().size() + 1));
-				town.centerX = pos.getX();
-				town.centerY = pos.getY();
-				town.centerZ = pos.getZ();
+				// le vrai centre d'un village existant, c'est sa cloche
+				BlockPos bell = Director.findBell(level, pos);
+				BlockPos c = bell != null ? bell : pos;
+				town.centerX = c.getX();
+				town.centerY = c.getY();
+				town.centerZ = c.getZ();
+				town.externalWell = Director.detectWell(level, c);
+				town.dense = true; // ville compacte par défaut (/lv layout spaced pour l'ancien mode)
+				town.stockpile.add("minecraft:emerald", Settlement.TREASURY_EMERALDS); // le trésor de la ville
 				Towns.all().add(town);
 			}
 			town.mayorId = uuid;

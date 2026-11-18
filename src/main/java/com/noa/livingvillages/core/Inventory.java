@@ -3,9 +3,9 @@ package com.noa.livingvillages.core;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/** L'inventaire que porte un villageois : 8 emplacements, avec les limites de pile de Minecraft. Aucune dépendance à Minecraft. */
+/** L'inventaire que porte un villageois : 9 emplacements (une rangée de coffre), avec les limites de pile de Minecraft. Aucune dépendance à Minecraft. */
 public final class Inventory {
-	public static final int SLOTS = 8;
+	public static final int SLOTS = 9;
 
 	private final String[] item = new String[SLOTS];
 	private final int[] count = new int[SLOTS];
@@ -16,6 +16,26 @@ public final class Inventory {
 				|| id.endsWith("_shovel") || id.endsWith("_sword") || id.endsWith("_bucket") || id.equals("minecraft:shears")) return 1;
 		if (id.equals("minecraft:snowball") || id.equals("minecraft:egg") || id.endsWith("_sign") || id.equals("minecraft:ender_pearl")) return 16;
 		return 64;
+	}
+
+	/** Objet de l'emplacement i (0 à SLOTS-1), ou null s'il est vide. */
+	public String itemAt(int slot) {
+		return item[slot];
+	}
+
+	public int countAt(int slot) {
+		return item[slot] == null ? 0 : count[slot];
+	}
+
+	/** Remplace le contenu d'un emplacement (id null ou quantité 0 = vide). Sert à l'écran d'inventaire. */
+	public void setSlot(int slot, String id, int n) {
+		if (id == null || n <= 0) {
+			item[slot] = null;
+			count[slot] = 0;
+		} else {
+			item[slot] = id;
+			count[slot] = n;
+		}
 	}
 
 	public int count(String id) {

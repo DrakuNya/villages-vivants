@@ -43,6 +43,15 @@ public final class LvCommands {
 								.then(Commands.literal("off").executes(ctx -> auto(ctx, false))))
 						.then(Commands.literal("decide").executes(LvCommands::decide))
 						.then(Commands.literal("inv").executes(LvCommands::inventories))
+						.then(Commands.literal("center").executes(LvCommands::center))
+						.then(Commands.literal("depot").executes(LvCommands::depot))
+						.then(Commands.literal("settle").executes(LvCommands::settle))
+						.then(Commands.literal("recruit")
+								.then(Commands.literal("on").executes(ctx -> recruit(ctx, true)))
+								.then(Commands.literal("off").executes(ctx -> recruit(ctx, false))))
+						.then(Commands.literal("layout")
+								.then(Commands.literal("dense").executes(ctx -> layout(ctx, true)))
+								.then(Commands.literal("spaced").executes(ctx -> layout(ctx, false))))
 						.then(Commands.literal("place")
 								.then(Commands.argument("plan", StringArgumentType.word()).executes(LvCommands::place)))
 						.then(Commands.literal("stock")
@@ -144,6 +153,69 @@ public final class LvCommands {
 		}
 		say(ctx, "Dépôt : " + (t.depotChest() == null ? "la place centrale" : "coffre de l'entrepôt") + " — entrepôt : "
 				+ (t.stockpile.asMap().isEmpty() ? "vide" : t.stockpile.toString().replace("minecraft:", "")), ChatFormatting.GRAY);
+		return 1;
+	}
+
+	/** Recentre la ville sur la position du joueur (ex : sur la cloche) et cherche un puits existant. */
+	private static int center(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+		Town t = townNear(ctx);
+		if (t == null) {
+			say(ctx, "Aucune ville à proximité.", ChatFormatting.RED);
+			return 0;
+		}
+		BlockPos p = ctx.getSource().getPlayerOrException().blockPosition();
+		t.centerX = p.getX();
+		t.centerY = p.getY();
+		t.centerZ = p.getZ();
+		t.externalWell = Director.detectWell(ctx.getSource().getLevel(), p);
+		Towns.markDirty();
+		say(ctx, t.name + " est recentrée ici" + (t.externalWell ? " (un puits existe déjà dans les environs)." : " (aucun puits détecté)."), ChatFormatting.GREEN);
+		return 1;
+	}
+
+	/** Change le style des prochaines constructions (les bâtiments déjà posés ne bougent pas). */
+	private static int layout(CommandContext<CommandSourceStack> ctx, boolean dense) throws CommandSyntaxException {
+		Town t = townNear(ctx);
+		if (t == null) {
+			say(ctx, "Aucune ville à proximité.", ChatFormatting.RED);
+			return 0;
+		}
+		t.dense = dense;
+		Towns.markDirty();
+		say(ctx, t.name + " : les prochaines constructions seront " + (dense ? "compactes (rues étroites, murs mitoyens, mairie au centre)." : "espacées (cercles de lots autour de la place)."), ChatFormatting.GREEN);
+		return 1;
+	}
+
+	/** Fonde une colonie à la place du joueur (comme la charte des colons, sans la consommer). */
+	private static int settle(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+		String err = Settlers.found(ctx.getSource().getLevel(), ctx.getSource().getPlayerOrException().blockPosition());
+		if (err != null) {
+			say(ctx, err, ChatFormatting.YELLOW);
+			return 0;
+		}
+		return 1;
+	}
+
+	/** Recrutement automatique des habitants sans métier (utile pour les grandes villes). */
+	private static int recruit(CommandContext<CommandSourceStack> ctx, boolean on) throws CommandSyntaxException {
+		Town t = townNear(ctx);
+		if (t == null) {
+			say(ctx, "Aucune ville à proximité.", ChatFormatting.RED);
+			return 0;
+		}
+		t.autoRecruit = on;
+		Towns.markDirty();
+		say(ctx, t.name + " : recrutement automatique " + (on ? "activé : les habitants sans métier en reçoivent un selon les besoins." : "désactivé."), ChatFormatting.GREEN);
+		return 1;
+	}
+
+	private static int depot(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+		Town t = townNear(ctx);
+		if (t == null) {
+			say(ctx, "Aucune ville à proximité.", ChatFormatting.RED);
+			return 0;
+		}
+		DepotMenu.open(ctx.getSource().getPlayerOrException(), t);
 		return 1;
 	}
 

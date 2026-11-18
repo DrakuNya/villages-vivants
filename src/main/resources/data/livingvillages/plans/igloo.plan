@@ -9,6 +9,8 @@ palette:
   D = minecraft:oak_door[half=lower,facing=south] -> minecraft:oak_door
   d = minecraft:oak_door[half=upper,facing=south] -> -
   T = minecraft:torch
+  f = minecraft:white_bed[part=foot,facing=north] -> minecraft:white_bed
+  h = minecraft:white_bed[part=head,facing=north] -> -
 layer 0:
 .SSS.
 SSSSS
@@ -17,8 +19,8 @@ SSSSS
 .SSS.
 layer 1:
 .SSS.
-S.T.S
-S...S
+ShThS
+Sf.fS
 S...S
 .SDS.
 layer 2:

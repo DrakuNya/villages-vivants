@@ -11,3 +11,4 @@ entrepot
 forge
 marche
 cuisine
+mairie

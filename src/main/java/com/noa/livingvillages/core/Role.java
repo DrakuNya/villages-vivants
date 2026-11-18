@@ -10,7 +10,7 @@ public enum Role {
 	LUMBERJACK("lumberjack", "Bûcheron", "minecraft:iron_axe", id -> id.endsWith("_log") || id.endsWith("_stem")),
 	MINER("miner", "Mineur", "minecraft:iron_pickaxe",
 			id -> List.of("minecraft:cobblestone", "minecraft:stone", "minecraft:sand", "minecraft:gravel", "minecraft:coal",
-					"minecraft:clay_ball", "minecraft:iron_ingot", "minecraft:sandstone", "minecraft:dirt", "minecraft:snow_block").contains(id)),
+					"minecraft:clay_ball", "minecraft:iron_ingot", "minecraft:sandstone", "minecraft:dirt", "minecraft:snow_block", "minecraft:emerald").contains(id)),
 	FARMER("farmer", "Fermier", "minecraft:iron_hoe",
 			id -> List.of("minecraft:wheat", "minecraft:carrot", "minecraft:potato", "minecraft:beetroot",
 					"minecraft:wheat_seeds", "minecraft:hay_block").contains(id)),
@@ -20,7 +20,7 @@ public enum Role {
 	COOK("cook", "Cuisinier", "minecraft:bowl", id -> id.equals("minecraft:bread") || id.startsWith("minecraft:cooked_")),
 	GUARD("guard", "Garde", "minecraft:iron_sword", id -> false),
 	FISHER("fisher", "Pêcheur", "minecraft:fishing_rod", id -> id.equals("minecraft:cod") || id.equals("minecraft:salmon")),
-	MERCHANT("merchant", "Marchand", "minecraft:emerald", id -> false);
+	MERCHANT("merchant", "Marchand", "minecraft:gold_ingot", id -> false);
 
 	public final String id;
 	public final String displayName;

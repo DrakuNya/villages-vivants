@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "livingvillages:block/town_chest"
+    }
+  }
+}

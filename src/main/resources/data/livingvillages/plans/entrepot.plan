@@ -12,7 +12,7 @@ palette:
   C = @stone
   D = @door[half=lower,facing=south] -> @door
   d = @door[half=upper,facing=south] -> -
-  K = minecraft:chest[facing=south]
+  K = livingvillages:town_chest
   S = @slab[type=bottom]
 layer 0:
 CCCCC

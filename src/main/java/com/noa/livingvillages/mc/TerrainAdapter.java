@@ -39,6 +39,8 @@ public final class TerrainAdapter implements TerrainView {
 			if (!s.getFluidState().isEmpty()) return BLOCKED;
 			String id = BlockUtil.idOf(s);
 			if (s.canBeReplaced() || id.endsWith("_leaves") || id.endsWith("_log") || id.endsWith("_wood")) continue;
+			// une structure existante (maison, puits, champ...) : on ne construit pas dessus
+			if (!BlockUtil.isNaturalGround(id)) return BLOCKED;
 			return y;
 		}
 		return BLOCKED;

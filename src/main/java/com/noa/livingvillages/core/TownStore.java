@@ -16,6 +16,9 @@ public final class TownStore {
 			sb.append("town\t").append(t.id).append('\t').append(clean(t.name)).append('\t').append(t.mayorId == null ? "-" : t.mayorId)
 					.append('\t').append(t.centerX).append('\t').append(t.centerY).append('\t').append(t.centerZ).append('\n');
 			sb.append("auto\t").append(t.auto ? 1 : 0).append('\n');
+			if (t.externalWell) sb.append("well\t1\n");
+			if (t.dense) sb.append("layout\tdense\n");
+			if (t.autoRecruit) sb.append("recruit\t1\n");
 			for (Map.Entry<String, Role> m : t.members.entrySet()) {
 				sb.append("member\t").append(m.getKey()).append('\t').append(m.getValue().id).append('\n');
 			}
@@ -48,6 +51,7 @@ public final class TownStore {
 
 	public static List<Town> read(String text, PlanCatalog plans) {
 		List<Town> towns = new ArrayList<>();
+		Map<BuildSite, Integer> pendingCursor = new java.util.IdentityHashMap<>();
 		Town cur = null;
 		for (String line : text.split("\r?\n")) {
 			if (line.isBlank() || line.equals("v1") || line.equals("v2")) continue;
@@ -69,7 +73,8 @@ public final class TownStore {
 					BuildPlan p = plans.get(f[2]);
 					if (cur != null && p != null) {
 						BuildSite bs = new BuildSite(f[1], p, Theme.valueOf(f[3]), Integer.parseInt(f[4]), Integer.parseInt(f[5]),
-								Integer.parseInt(f[6]), Integer.parseInt(f[7]), Integer.parseInt(f[8]));
+								Integer.parseInt(f[6]), Integer.parseInt(f[7]), 0);
+						pendingCursor.put(bs, Integer.parseInt(f[8]));
 						bs.priority = f.length > 9 ? Integer.parseInt(f[9]) : p.meta.priority();
 						bs.prepDone = f.length <= 10 || f[10].equals("1");
 						bs.roadPlanned = f.length <= 11 || f[11].equals("1");
@@ -80,6 +85,15 @@ public final class TownStore {
 				}
 				case "carry" -> {
 					if (cur != null) cur.inventoryOf(f[1]).add(f[2], Integer.parseInt(f[3]));
+				}
+				case "recruit" -> {
+					if (cur != null) cur.autoRecruit = f[1].equals("1");
+				}
+				case "layout" -> {
+					if (cur != null) cur.dense = f[1].equals("dense");
+				}
+				case "well" -> {
+					if (cur != null) cur.externalWell = f[1].equals("1");
 				}
 				case "auto" -> {
 					if (cur != null) cur.auto = f[1].equals("1");
@@ -96,6 +110,14 @@ public final class TownStore {
 				}
 				default -> {
 				}
+			}
+		}
+		// murs mitoyens (même calcul qu'à la création), puis progression de chaque chantier
+		for (Town t : towns) {
+			for (BuildSite site : t.sites) {
+				if (t.dense) SharedWalls.apply(t, site);
+				Integer c = pendingCursor.get(site);
+				if (c != null) site.setCursor(c);
 			}
 		}
 		return towns;

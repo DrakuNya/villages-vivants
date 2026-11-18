@@ -1,4 +1,7 @@
 {
   "item.livingvillages.mallet": "Mallet",
-  "item.livingvillages.mayor_sash": "Mayor's Sash"
+  "item.livingvillages.mayor_sash": "Mayor's Sash",
+  "item.livingvillages.founders_charter": "Founders' Charter",
+  "block.livingvillages.town_chest": "Town Chest",
+  "itemGroup.livingvillages.main": "Living Villages"
 }

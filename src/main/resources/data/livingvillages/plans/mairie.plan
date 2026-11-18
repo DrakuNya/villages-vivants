@@ -1,0 +1,77 @@
+plan: mairie
+title: Mairie
+requires: any
+category: center
+max: 1
+priority: 1
+palette:
+  L = @log
+  P = @planks
+  C = @stone
+  G = minecraft:glass_pane
+  D = @door[half=lower,facing=south] -> @door
+  d = @door[half=upper,facing=south] -> -
+  S = @slab[type=bottom]
+  T = minecraft:torch
+  K = minecraft:chest[facing=south]
+  X = minecraft:crafting_table
+layer 0:
+CCCCCCCCC
+CPPPPPPPC
+CPPPPPPPC
+CPPPPPPPC
+CPPPPPPPC
+CPPPPPPPC
+CPPPPPPPC
+CPPPPPPPC
+CCCCCCCCC
+layer 1:
+LCCCCCCCL
+C.......C
+C.K...K.C
+C.......C
+C...X...C
+C.......C
+C.T...T.C
+C.......C
+LCCCDCCCL
+layer 2:
+LCGCCCGCL
+C.......C
+G.......G
+C.......C
+G.......G
+C.......C
+G.......G
+C.......C
+LCGCdCGCL
+layer 3:
+LCCCCCCCL
+C.......C
+C.......C
+C.......C
+C.......C
+C.......C
+C.......C
+C.......C
+LCCCCCCCL
+layer 4:
+LCCCCCCCL
+C.......C
+C.......C
+C.......C
+C.......C
+C.......C
+C.......C
+C.......C
+LCCCCCCCL
+layer 5:
+SSSSSSSSS
+SSSSSSSSS
+SSSSSSSSS
+SSSSSSSSS
+SSSSSSSSS
+SSSSSSSSS
+SSSSSSSSS
+SSSSSSSSS
+SSSSSSSSS

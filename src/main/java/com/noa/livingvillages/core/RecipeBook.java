@@ -17,6 +17,16 @@ public final class RecipeBook {
 		return out;
 	}
 
+	/** Tous les objets qui apparaissent dans une recette (en entrée ou en sortie). */
+	public java.util.Set<String> knownItems() {
+		java.util.Set<String> s = new java.util.HashSet<>();
+		for (Recipe r : recipes) {
+			s.addAll(r.inputs().keySet());
+			s.addAll(r.outputs().keySet());
+		}
+		return s;
+	}
+
 	public int size() {
 		return recipes.size();
 	}
@@ -48,6 +58,8 @@ public final class RecipeBook {
 			b.add(Recipe.of("table de craft", mc("crafting_table"), 1, planks, 4));
 			b.add(Recipe.of("coffre", mc("chest"), 1, planks, 8));
 		}
+		// coffre de ville du mod : un coffre + une émeraude (celui des entrepôts, ouvrable sur l'entrepôt de la ville)
+		for (String w : WOODS) b.add(Recipe.of("coffre de ville", "livingvillages:town_chest", 1, mc(w + "_planks"), 8, mc("emerald"), 1));
 		b.add(Recipe.of("échelle", mc("ladder"), 3, mc("stick"), 7));
 		b.add(Recipe.of("torche", mc("torch"), 4, mc("coal"), 1, mc("stick"), 1));
 		// Pierre

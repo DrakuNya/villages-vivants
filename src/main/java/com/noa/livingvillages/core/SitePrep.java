@@ -17,6 +17,11 @@ public final class SitePrep {
 
 	/** Liste des opérations de terrassement, du bas vers le haut (remblais d'abord, puis déblais). */
 	public static List<Op> compute(BuildSite site, TerrainView t) {
+		return compute(site, t, Set.of());
+	}
+
+	/** 'others' : cases des autres bâtiments (murs voisins, mitoyens) à ne jamais dégager ni remblayer. */
+	public static List<Op> compute(BuildSite site, TerrainView t, Set<Long> others) {
 		int[] f = site.footprint();
 		int sizeY = site.plan.sizeY;
 		Set<Long> layer0 = new HashSet<>();
@@ -27,6 +32,7 @@ public final class SitePrep {
 		List<Op> clears = new ArrayList<>();
 		for (int x = f[0] - 1; x <= f[2] + 1; x++) {
 			for (int z = f[1] - 1; z <= f[3] + 1; z++) {
+				if (others.contains(RoadCell.key(x, z))) continue;
 				boolean inside = x >= f[0] && x <= f[2] && z >= f[1] && z <= f[3];
 				int g = t.groundY(x, z);
 				if (inside) {

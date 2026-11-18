@@ -44,6 +44,20 @@ public final class BlockUtil {
 		return v.isPresent() ? state.setValue(prop, (Comparable) v.get()) : state;
 	}
 
+	/** Sol naturel (sur lequel on peut construire) ; tout le reste (pierre taillée, planches, verre, champs...) est une structure existante. */
+	public static boolean isNaturalGround(String id) {
+		if (id.endsWith("_ore") || id.endsWith("_terracotta") || id.endsWith("_concrete_powder")) return true;
+		return switch (id) {
+			case "minecraft:grass_block", "minecraft:dirt", "minecraft:coarse_dirt", "minecraft:podzol", "minecraft:mycelium",
+					"minecraft:rooted_dirt", "minecraft:mud", "minecraft:clay", "minecraft:gravel", "minecraft:sand", "minecraft:red_sand",
+					"minecraft:sandstone", "minecraft:red_sandstone", "minecraft:stone", "minecraft:andesite", "minecraft:diorite",
+					"minecraft:granite", "minecraft:tuff", "minecraft:deepslate", "minecraft:terracotta", "minecraft:snow_block",
+					"minecraft:powder_snow", "minecraft:ice", "minecraft:packed_ice", "minecraft:blue_ice", "minecraft:moss_block",
+					"minecraft:dirt_path", "minecraft:calcite", "minecraft:dripstone_block", "minecraft:bedrock" -> true;
+			default -> false;
+		};
+	}
+
 	public static String idOf(BlockState state) {
 		return BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
 	}

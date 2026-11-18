@@ -6,10 +6,15 @@ import com.noa.livingvillages.core.Inventory;
 import com.noa.livingvillages.core.Logistics;
 import com.noa.livingvillages.core.MayorBrain;
 import com.noa.livingvillages.core.PlanBlock;
+import com.noa.livingvillages.core.Recruiter;
+import com.noa.livingvillages.core.RecipeBook;
+import com.noa.livingvillages.core.WorkRewards;
 import com.noa.livingvillages.core.RoadCell;
 import com.noa.livingvillages.core.RoadLogic;
 import com.noa.livingvillages.core.Role;
 import com.noa.livingvillages.core.SitePrep;
+import com.noa.livingvillages.core.Theme;
+import com.noa.livingvillages.core.BuildPlan;
 import com.noa.livingvillages.core.Town;
 import com.noa.livingvillages.core.TownBoard;
 import com.noa.livingvillages.core.WorkerLogic;
@@ -22,16 +27,22 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.npc.villager.Villager;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Random;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.HashSet;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -46,6 +57,9 @@ import java.util.UUID;
 public final class Director {
 	private static final int INTERVAL_TICKS = 10;
 	private static final int MAYOR_EVERY_STEPS = 20;       // 20 x 10 ticks = 10 secondes
+	private static final int RECRUIT_EVERY_STEPS = 60;     // toutes les 30 secondes
+	private static final Random RNG = new Random();
+	private static final double PROSPECT_BOOST = 3.0;
 	private static final int PREP_OPS_PER_STEP = 40;
 	private static final double REACH_SQ = 6.0 * 6.0;
 	private static final int SEARCH_RADIUS = 24;
@@ -55,7 +69,7 @@ public final class Director {
 	private static final RoadLogic ROADS = new RoadLogic(Towns.PLANNER);
 
 	/** Tâche d'un ouvrier : bloc visé (ou créature visée) et demande prise sur le tableau. Non sauvegardée. */
-	private record Task(BlockPos target, UUID entity, TownBoard.Request request) {
+	private record Task(BlockPos target, UUID entity, TownBoard.Request request, boolean prospect) {
 	}
 
 	private static final Map<String, Task> TASKS = new HashMap<>();
@@ -63,8 +77,61 @@ public final class Director {
 	private static final Map<UUID, Long> SHEARED = new HashMap<>();
 	private static long ticks;
 	private static long steps;
+	/** Pauses : un sac ou le dépôt est ouvert par un joueur (on ne sait pas quand il se referme : on attend quelques secondes). */
+	private static final int PAUSE_TICKS = 200;
+	private static final Map<String, Long> PAUSED_MEMBERS = new HashMap<>();
+	private static long depotPausedUntil;
 
 	private Director() {
+	}
+
+	// ------------------------------------------------------------------ objets jetés par terre
+
+	private static Set<String> usefulItems;
+
+	/** Les objets que la ville sait utiliser : ingrédients et produits des recettes, besoins des plans, matières que les ouvriers récoltent. */
+	private static synchronized Set<String> useful() {
+		if (usefulItems == null) {
+			Set<String> s = new HashSet<>(Towns.RECIPES.knownItems());
+			for (BuildPlan p : Plans.catalog().all()) {
+				for (Theme th : Theme.values()) s.addAll(p.totalNeeds(th).keySet());
+			}
+			usefulItems = s;
+		}
+		return usefulItems;
+	}
+
+	/**
+	 * Un habitant ramasse les objets utiles à la ville jetés à moins de 2,5 blocs (après 2 secondes, pour laisser le joueur
+	 * les reprendre). Les constructeurs les mettent dans leur sac ; les autres (ou le trop-plein) vont à l'entrepôt.
+	 */
+	private static void pickUp(ServerLevel level, Town town, String id, Role role, Villager villager) {
+		for (ItemEntity drop : level.getEntitiesOfClass(ItemEntity.class, new AABB(villager.blockPosition()).inflate(2.5), x -> true)) {
+			if (drop.tickCount < 40) continue;
+			ItemStack stack = drop.getItem();
+			if (stack.isEmpty()) continue;
+			String itemId = ItemUtil.idOf(stack);
+			if (!useful().contains(itemId) && !Role.anyProduces(itemId)) continue;
+			int n = stack.getCount();
+			int rest = role == Role.BUILDER ? town.inventoryOf(id).add(itemId, n) : n;
+			if (rest > 0) town.stockpile.add(itemId, rest);
+			drop.discard();
+			Towns.markDirty();
+		}
+	}
+
+	/** Oublie ce que l'habitant était en train de faire (il a disparu). */
+	static void forget(String memberId) {
+		TASKS.remove(memberId);
+		PAUSED_MEMBERS.remove(memberId);
+	}
+
+	public static void pauseMember(String memberId) {
+		PAUSED_MEMBERS.put(memberId, ticks + PAUSE_TICKS);
+	}
+
+	public static void pauseDepot() {
+		depotPausedUntil = ticks + PAUSE_TICKS;
 	}
 
 	public static BlockPos signPos(BuildSite s) {
@@ -80,11 +147,15 @@ public final class Director {
 		for (Town town : List.copyOf(Towns.all())) {
 			town.syncBoard(Towns.PLANNER);
 			if (steps % MAYOR_EVERY_STEPS == 0) mayorThink(level, town, false);
+			if (town.autoRecruit && steps % RECRUIT_EVERY_STEPS == 0) recruit(level, town);
 			prepare(level, town);
 			Map<String, BuildSite> assignments = town.assignBuilders();
 			for (Map.Entry<String, Role> m : town.members.entrySet()) {
+				Long pausedUntil = PAUSED_MEMBERS.get(m.getKey());
+				if (pausedUntil != null && pausedUntil > ticks) continue; // son sac est ouvert
 				Entity e = level.getEntity(UUID.fromString(m.getKey()));
 				if (!(e instanceof Villager villager) || !villager.isAlive()) continue;
+				pickUp(level, town, m.getKey(), m.getValue(), villager);
 				switch (m.getValue()) {
 					case BUILDER -> builder(level, town, villager, assignments.get(m.getKey()));
 					case LUMBERJACK, MINER, SHEPHERD -> gatherer(level, town, m.getKey(), m.getValue(), villager);
@@ -101,11 +172,11 @@ public final class Director {
 	private static int population(ServerLevel level, Town town) {
 		BlockPos c = new BlockPos(town.centerX, town.centerY, town.centerZ);
 		int n = 0;
-		for (Villager v : level.getEntitiesOfClass(Villager.class, new AABB(c).inflate(64), x -> true)) if (!v.isBaby()) n++;
+		for (Villager v : level.getEntitiesOfClass(Villager.class, new AABB(c).inflate(Math.max(64, town.extent() + 40)), x -> true)) if (!v.isBaby()) n++;
 		return n;
 	}
 
-	private static String biomeOf(ServerLevel level, BlockPos pos) {
+	static String biomeOf(ServerLevel level, BlockPos pos) {
 		return level.getBiome(pos).unwrapKey().map(k -> k.identifier().toString()).orElse("");
 	}
 
@@ -157,7 +228,7 @@ public final class Director {
 		if (site == null || !anyBuilderAlive(level, town)) return;
 		final BuildSite target = site;
 		ArrayDeque<SitePrep.Op> ops = PREP.computeIfAbsent(site.id,
-				id -> new ArrayDeque<>(SitePrep.compute(target, new TerrainAdapter(level, town.centerY))));
+				id -> new ArrayDeque<>(SitePrep.compute(target, new TerrainAdapter(level, town.centerY), town.footprintCellsExcept(target))));
 		BlockState dirt = BlockUtil.parse("minecraft:dirt");
 		BlockState grass = BlockUtil.parse("minecraft:grass_block");
 		for (int i = 0; i < PREP_OPS_PER_STEP && !ops.isEmpty(); i++) {
@@ -176,7 +247,7 @@ public final class Director {
 		if (ops.isEmpty()) {
 			PREP.remove(site.id);
 			site.prepDone = true;
-			placeSign(level, site);
+			if (!town.dense) placeSign(level, site); // en ville compacte, pas de panneau : on clique sur le bâtiment lui-même
 			Towns.markDirty();
 			broadcast(level, town, "Terrain prêt pour : " + site.plan.title + ".");
 		}
@@ -202,6 +273,7 @@ public final class Director {
 	/** Marche vers le dépôt ; renvoie vrai quand on est assez près pour y travailler. */
 	private static boolean atDepot(ServerLevel level, Town town, Villager v) {
 		BlockPos depot = depotPos(level, town);
+		if (depotPausedUntil > ticks) return false; // un joueur a le dépôt ouvert : on attend
 		if (v.blockPosition().distSqr(depot) > REACH_SQ) {
 			walkTo(v, depot);
 			return false;
@@ -250,7 +322,7 @@ public final class Director {
 		site.advance();
 		Towns.markDirty();
 		if (site.complete()) {
-			level.destroyBlock(signPos(site), false); // le panneau disparaît quand c'est fini
+			if (!town.dense) level.destroyBlock(signPos(site), false); // le panneau disparaît quand c'est fini
 			broadcast(level, town, site.plan.title + " est terminé(e) !");
 		}
 	}
@@ -318,6 +390,46 @@ public final class Director {
 		return item.endsWith("_wool") ? "minecraft:sheep" : null;
 	}
 
+	/** La cloche d'un village existant (son vrai centre), ou null. */
+	static BlockPos findBell(ServerLevel level, BlockPos from) {
+		BlockPos best = null;
+		double bestD = Double.MAX_VALUE;
+		for (int dx = -48; dx <= 48; dx++) {
+			for (int dz = -48; dz <= 48; dz++) {
+				for (int dy = -8; dy <= 10; dy++) {
+					BlockPos p = from.offset(dx, dy, dz);
+					if (!level.hasChunkAt(p) || !BlockUtil.idOf(level.getBlockState(p)).equals("minecraft:bell")) continue;
+					double d = p.distSqr(from);
+					if (d < bestD) {
+						bestD = d;
+						best = p;
+					}
+				}
+			}
+		}
+		return best;
+	}
+
+	/** Un puits existant : de l'eau entourée (au moins 3 côtés) de pierre taillée ou de grès. */
+	static boolean detectWell(ServerLevel level, BlockPos center) {
+		int[][] dirs = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+		for (int dx = -40; dx <= 40; dx++) {
+			for (int dz = -40; dz <= 40; dz++) {
+				for (int dy = -6; dy <= 8; dy++) {
+					BlockPos p = center.offset(dx, dy, dz);
+					if (!level.hasChunkAt(p) || !BlockUtil.idOf(level.getBlockState(p)).equals("minecraft:water")) continue;
+					int walls = 0;
+					for (int[] d : dirs) {
+						String id = BlockUtil.idOf(level.getBlockState(p.offset(d[0], 0, d[1])));
+						if (id.contains("cobblestone") || id.contains("sandstone") || id.contains("stone_brick")) walls++;
+					}
+					if (walls >= 3) return true;
+				}
+			}
+		}
+		return false;
+	}
+
 	private static BlockPos findNearest(ServerLevel level, BlockPos from, List<String> blockIds) {
 		BlockPos best = null;
 		double bestD = Double.MAX_VALUE;
@@ -366,11 +478,42 @@ public final class Director {
 				town.deposit(id);
 				Towns.markDirty();
 			}
-			case HARVEST -> harvest(level, town, id, villager, bag, act.request());
+			case HARVEST -> harvest(level, town, id, role, villager, bag, act.request());
 		}
 	}
 
-	private static void harvest(ServerLevel level, Town town, String id, Villager villager, Inventory bag, TownBoard.Request req) {
+	/** Blocs que le métier peut casser « au hasard » pour fouiller quand le filon cherché n'existe pas à proximité. */
+	private static List<String> prospectBlocks(Role role) {
+		if (role == Role.MINER) {
+			return List.of("minecraft:stone", "minecraft:cobblestone", "minecraft:dirt", "minecraft:grass_block", "minecraft:sand",
+					"minecraft:gravel", "minecraft:andesite", "minecraft:granite", "minecraft:diorite");
+		}
+		if (role == Role.LUMBERJACK) {
+			List<String> logs = new ArrayList<>();
+			for (String w : RecipeBook.WOODS) logs.add("minecraft:" + w + "_log");
+			return logs;
+		}
+		return List.of();
+	}
+
+	/** Ce qu'on récupère en cassant ce bloc (la pierre donne du cobblestone, l'herbe de la terre). */
+	private static String dropOf(String blockId) {
+		return switch (blockId) {
+			case "minecraft:stone" -> "minecraft:cobblestone";
+			case "minecraft:grass_block" -> "minecraft:dirt";
+			default -> blockId;
+		};
+	}
+
+	/** Les récompenses de travail vont dans le sac ; ce qui ne rentre pas va directement à l'entrepôt. */
+	private static void giveRewards(Town town, Inventory bag, java.util.Map<String, Integer> rewards) {
+		for (var e : rewards.entrySet()) {
+			int rest = bag.add(e.getKey(), e.getValue());
+			if (rest > 0) town.stockpile.add(e.getKey(), rest);
+		}
+	}
+
+	private static void harvest(ServerLevel level, Town town, String id, Role role, Villager villager, Inventory bag, TownBoard.Request req) {
 		Task task = TASKS.get(id);
 		if (task == null) {
 			String entityType = entitySourceOf(req.item);
@@ -380,15 +523,22 @@ public final class Director {
 					giveUp(town, id);
 					return;
 				}
-				task = new Task(animal.blockPosition(), animal.getUUID(), req);
+				task = new Task(animal.blockPosition(), animal.getUUID(), req, false);
 			} else {
 				List<String> sources = sourcesOf(req.item);
 				BlockPos found = sources.isEmpty() ? null : findNearest(level, villager.blockPosition(), sources);
+				boolean prospect = false;
+				if (found == null && WorkRewards.canFind(role, req.item)) {
+					// pas de filon à proximité : on fouille au hasard et on compte sur la chance (chance triplée)
+					List<String> generic = prospectBlocks(role);
+					found = generic.isEmpty() ? null : findNearest(level, villager.blockPosition(), generic);
+					prospect = found != null;
+				}
 				if (found == null) {
 					giveUp(town, id); // rien à récolter ici : la demande reste ouverte pour un autre
 					return;
 				}
-				task = new Task(found, null, req);
+				task = new Task(found, null, req, prospect);
 			}
 			TASKS.put(id, task);
 		}
@@ -410,16 +560,47 @@ public final class Director {
 			int wool = Math.min(1 + (int) (ticks % 3), bag.room(req.item));
 			SHEARED.put(task.entity(), ticks);
 			if (wool > 0) bag.add(req.item, wool);
+			giveRewards(town, bag, WorkRewards.roll(role, null, 1.0, 1.0, RNG));
 			Towns.markDirty();
 		} else {
-			List<String> sources = sourcesOf(req.item);
-			if (sources.contains(BlockUtil.idOf(level.getBlockState(target))) && bag.canAdd(req.item, 1)) {
-				level.destroyBlock(target, false);
-				bag.add(req.item, 1);
-				Towns.markDirty();
+			List<String> sources = task.prospect() ? prospectBlocks(role) : sourcesOf(req.item);
+			String blockId = BlockUtil.idOf(level.getBlockState(target));
+			if (sources.contains(blockId)) {
+				String gain = task.prospect() ? dropOf(blockId) : req.item;
+				if (task.prospect() || bag.canAdd(gain, 1)) {
+					level.destroyBlock(target, false);
+					if (bag.canAdd(gain, 1)) bag.add(gain, 1);
+					giveRewards(town, bag, WorkRewards.roll(role, task.prospect() ? req.item : null, 1.0, task.prospect() ? PROSPECT_BOOST : 1.0, RNG));
+					Towns.markDirty();
+				}
 			}
 		}
 		TASKS.remove(id);
+	}
+
+	/** Recrutement automatique : les habitants adultes sans métier reçoivent un métier selon les besoins de la ville. */
+	private static void recruit(ServerLevel level, Town town) {
+		BlockPos c = new BlockPos(town.centerX, town.centerY, town.centerZ);
+		List<String> free = new ArrayList<>();
+		for (Villager v : level.getEntitiesOfClass(Villager.class, new AABB(c).inflate(Math.max(64, town.extent() + 40)), x -> true)) {
+			if (v.isBaby()) continue;
+			String id = v.getUUID().toString();
+			if (Towns.ofMember(id) == null) free.add(id);
+		}
+		if (free.isEmpty()) return;
+		var got = Recruiter.assign(town, free, free.size() + town.members.size());
+		for (var e : got.entrySet()) {
+			town.members.put(e.getKey(), e.getValue());
+			Entity en = level.getEntity(UUID.fromString(e.getKey()));
+			if (en instanceof Villager v) {
+				v.setCustomName(Component.literal(e.getValue().displayName));
+				v.setCustomNameVisible(true);
+			}
+		}
+		if (!got.isEmpty()) {
+			Towns.markDirty();
+			broadcast(level, town, got.size() + " habitant(s) ont reçu un métier à " + town.name + ".");
+		}
 	}
 
 	/** Rien à récolter : on libère la commande ; avec un sac non vide, l'ouvrier ira déposer au prochain tour. */
