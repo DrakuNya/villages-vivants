@@ -121,7 +121,7 @@ public final class Director {
 	}
 
 	/** Oublie ce que l'habitant était en train de faire (il a disparu). */
-	static void forget(String memberId) {
+	public static void forget(String memberId) {
 		TASKS.remove(memberId);
 		PAUSED_MEMBERS.remove(memberId);
 	}
@@ -200,7 +200,7 @@ public final class Director {
 		return msg;
 	}
 
-	static void broadcast(ServerLevel level, Town town, String text) {
+	public static void broadcast(ServerLevel level, Town town, String text) {
 		for (ServerPlayer p : level.players()) {
 			double dx = p.getX() - town.centerX, dz = p.getZ() - town.centerZ;
 			if (dx * dx + dz * dz < 160.0 * 160.0) p.sendSystemMessage(Component.literal(text).withStyle(ChatFormatting.AQUA));
